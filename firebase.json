@@ -9,9 +9,12 @@
     "providers": {
       "emailPassword": true,
       "googleSignIn": {
-        "oAuthBrandDisplayName": "我的旅程",
+        "oAuthBrandDisplayName": "\u6211\u7684\u65c5\u7a0b",
         "supportEmail": "chaniomeng@gmail.com"
       }
     }
+  },
+  "storage": {
+    "rules": "storage.rules"
   }
 }
