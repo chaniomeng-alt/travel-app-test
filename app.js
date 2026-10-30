@@ -170,38 +170,38 @@ const store = {
 };
 
 const KZ_DEFAULT_DAYS = [
-  { dow:'Sun', n:22, title:'抵達熊本', route:'香港 → 福岡 → 熊本', hotel:'ドーミーイン熊本', hq:HQ_KUM, temp:[18,12], place:'熊本', cat:'maneki', items:[
+  { dow:'Sun', n:22, title:'抵達熊本', route:'香港 → 福岡 → 熊本', hotel:'ドーミーイン熊本', hq:HQ_KUM, temp:[18,12], place:'熊本', cat:'km08', items:[
     { time:'早上', ic:'bus', text:'金巴：澳門 → 香港機場' },
     { time:'12:55', ic:'plane', text:'UO638 · HKG 客運大樓 2 起飛', q:'香港國際機場 客運大樓2' },
     { time:'17:00', ic:'plane', text:'抵達福岡機場國際線航廈', q:FUK_INT },
     { time:'傍晚', ic:'train', text:'新幹線：博多 → 熊本站', must:1, q:'熊本駅' },
     { time:'晚上', ic:'bed', text:'入住ドーミーイン熊本（20:00 後可入住）', q:HQ_KUM }
   ]},
-  { dow:'Mon', n:23, title:'黑川溫泉日歸', route:'熊本 → 黑川溫泉 → 熊本', hotel:'ドーミーイン熊本', hq:HQ_KUM, temp:[15,8], place:'黑川', cat:'sakura', items:[
+  { dow:'Mon', n:23, title:'黑川溫泉日歸', route:'熊本 → 黑川溫泉 → 熊本', hotel:'ドーミーイン熊本', hq:HQ_KUM, temp:[15,8], place:'黑川', cat:'km02', items:[
     { time:'早上', ic:'bus', text:'熊本出發 → 黑川溫泉（九州橫斷巴士）', must:1, q:'黒川温泉' },
     { time:'中午', ic:'pin', text:'入湯手形多湯巡禮，日歸溫泉', q:'黒川温泉 入湯手形' },
     { time:'下午', ic:'pin', text:'黑川溪谷散步，看秋色', q:'黒川温泉街' },
     { time:'傍晚', ic:'bus', text:'返回熊本（住ドーミーイン）', q:HQ_KUM }
   ]},
-  { dow:'Tue', n:24, title:'前往長崎', route:'熊本 → 博多 → 長崎', hotel:'ドーミーイン PREMIUM 長崎駅前', hq:HQ_NAG, temp:[19,13], place:'長崎', cat:'ramen', items:[
+  { dow:'Tue', n:24, title:'前往長崎', route:'熊本 → 博多 → 長崎', hotel:'ドーミーイン PREMIUM 長崎駅前', hq:HQ_NAG, temp:[19,13], place:'長崎', cat:'km09', items:[
     { time:'早上', ic:'train', text:'新幹線：熊本 → 博多 → 長崎（西九州新幹線）', must:1, q:'長崎駅' },
     { time:'中午', ic:'bed', text:'入住長崎住宿', q:HQ_NAG },
     { time:'下午', ic:'pin', text:'長崎原爆資料館', must:1, q:'長崎原爆資料館' },
     { time:'晚上', ic:'food', text:'中華街或出島附近晚餐', q:'長崎新地中華街' }
   ]},
-  { dow:'Wed', n:25, title:'軍艦島・原爆', route:'長崎 → 軍艦島 → 長崎市區', hotel:'ドーミーイン PREMIUM 長崎駅前', hq:HQ_NAG, temp:[19,13], place:'長崎', cat:'bowl', items:[
+  { dow:'Wed', n:25, title:'軍艦島・原爆', route:'長崎 → 軍艦島 → 長崎市區', hotel:'ドーミーイン PREMIUM 長崎駅前', hq:HQ_NAG, temp:[19,13], place:'長崎', cat:'km06', items:[
     { time:'早上', ic:'bus', text:'前往軍艦島登島碼頭', must:1, q:'軍艦島クルーズ 乗り場 長崎' },
     { time:'上午', ic:'pin', text:'軍艦島巡禮（視天氣）', must:1, q:'軍艦島' },
     { time:'下午', ic:'pin', text:'長崎原爆資料館（如未看完）', must:1, q:'長崎原爆資料館' },
     { time:'晚上', ic:'food', text:'長崎市區散步或美食' }
   ]},
-  { dow:'Thu', n:26, title:'長崎 → 福岡', route:'長崎 → 博多', hotel:'西鉄ホテル クルーム博多', hq:HQ_FUK, temp:[18,12], place:'福岡', cat:'maneki', items:[
+  { dow:'Thu', n:26, title:'長崎 → 福岡', route:'長崎 → 博多', hotel:'西鉄ホテル クルーム博多', hq:HQ_FUK, temp:[18,12], place:'福岡', cat:'km01', items:[
     { time:'早上', ic:'train', text:'新幹線：長崎 → 博多', must:1, q:'博多駅' },
     { time:'中午', ic:'bed', text:'抵達福岡，入住', q:HQ_FUK },
     { time:'下午', ic:'pin', text:'福岡市區自由活動' },
     { time:'晚上', ic:'food', text:'福岡美食' }
   ]},
-  { dow:'Fri', n:27, title:'貓島 或 大濠公園', route:'方案 A 相島 ／ 方案 B 大濠公園', hotel:'西鉄ホテル クルーム博多', hq:HQ_FUK, temp:[18,12], place:'福岡', cat:'sakura', items:[
+  { dow:'Fri', n:27, title:'貓島 或 大濠公園', route:'方案 A 相島 ／ 方案 B 大濠公園', hotel:'西鉄ホテル クルーム博多', hq:HQ_FUK, temp:[18,12], place:'福岡', cat:'km05', items:[
     { time:'方案 A', ic:'train', text:'福岡 → 新宮港 → 渡輪去相島（貓島）', must:1, opt:'a', q:'相島渡船 新宮港' },
     { time:'方案 A', ic:'pin', text:'相島散步、與貓咪互動、看海', must:1, opt:'a', q:'相島 福岡' },
     { time:'方案 B', ic:'pin', text:'大濠公園散步、看秋景（市內輕鬆）', must:1, opt:'b', q:'大濠公園' },
@@ -209,7 +209,7 @@ const KZ_DEFAULT_DAYS = [
     { time:'中午', ic:'food', text:'FILTER SUPPLY（フィルターサプライ）飲咖啡及買咖啡豆', must:1, q:'FILTER SUPPLY 福岡' },
     { time:'晚上', ic:'food', text:'福岡市區自由活動／休息' }
   ]},
-  { dow:'Sat', n:28, title:'福岡自由・出發', route:'福岡 → 香港', hotel:'11:00 前退房（西鉄ホテル クルーム博多）', hq:HQ_FUK, temp:[18,12], place:'福岡', cat:'ramen', items:[
+  { dow:'Sat', n:28, title:'福岡自由・出發', route:'福岡 → 香港', hotel:'11:00 前退房（西鉄ホテル クルーム博多）', hq:HQ_FUK, temp:[18,12], place:'福岡', cat:'km03', items:[
     { time:'09:45', ic:'bed', text:'退房（11:00 前），出發去機場', q:HQ_FUK },
     { time:'10:00', ic:'train', text:'地鐵：博多 → 福岡空港（約 5–6 分鐘）', must:1, q:'福岡空港駅' },
     { time:'10:50', ic:'plane', text:'辦理登機、退稅、買最後手信（起飛前 2 小時到）', must:1, q:FUK_INT },
@@ -332,7 +332,7 @@ const DEFAULT_AVATARS = [
   { src: 'assets/stickers/sticker-dog-01.png', label: '柴犬' }
 ];
 const DEFAULT_MEMBERS_CHA = [{ id: 'm-cha', name: 'CHA', role: '旅客', avatar: 'assets/stickers/pets/sticker-dog-white-tan.png' }];
-const SEED_VER = 11;
+const SEED_VER = 12;
 
 function renameTripTitles() {
   let changed = false;
@@ -550,6 +550,8 @@ function ensureSeed() {
   if (renameTripTitles()) always = true;
   if (ensurePartyMembers()) always = true;
   if (ensureDepartTimes()) always = true;
+  if (typeof migrateKyushuDayCats === 'function' && migrateKyushuDayCats()) always = true;
+  if (typeof migrateBangkokStickers === 'function' && migrateBangkokStickers()) always = true;
   if ((APP.seedVersion || 1) >= SEED_VER) {
     if (always) persist();
     return always;
@@ -800,6 +802,17 @@ const STICKERS = {
   petChoco: { name: '朱古力狗', src: 'assets/stickers/pets/sticker-dog-chocolate.png' },
   petChoco2: { name: '朱古力狗趴', src: 'assets/stickers/pets/sticker-dog-chocolate-pose2.png' },
   petChaimaru: { name: '柴丸', src: 'assets/stickers/pets/sticker-dog-chaimaru.png' },
+  /* Kyushu multi-element cats (Marshall 指定七日行程卡) */
+  km01: { name: '屋台拉麵', src: 'assets/stickers/kyushu-multi/sticker-01-yatai-ramen.png' },
+  km02: { name: '溫泉', src: 'assets/stickers/kyushu-multi/sticker-02-onsen.png' },
+  km03: { name: '行李出發', src: 'assets/stickers/kyushu-multi/sticker-03-luggage.png' },
+  km04: { name: '太宰府', src: 'assets/stickers/kyushu-multi/sticker-04-dazaifu.png' },
+  km05: { name: '相島', src: 'assets/stickers/kyushu-multi/sticker-05-ainoshima.png' },
+  km06: { name: '山笠', src: 'assets/stickers/kyushu-multi/sticker-06-yamakasa.png' },
+  km07: { name: '手信', src: 'assets/stickers/kyushu-multi/sticker-07-souvenir.png' },
+  km08: { name: '熊本', src: 'assets/stickers/kyushu-multi/sticker-08-kumamoto.png' },
+  km09: { name: '新幹線', src: 'assets/stickers/kyushu-multi/sticker-09-shinkansen.png' },
+  km10: { name: '櫻花多元素', src: 'assets/stickers/kyushu-multi/sticker-10-sakura.png' },
   /* legacy canvas keys kept so old placements still render */
   maneki: { name: '招財貓', src: 'assets/stickers/sticker-maneki.png' },
   sakura: { name: '櫻花貓', src: 'assets/stickers/sticker-sakura.png' },
@@ -824,16 +837,27 @@ function stickerKeysForTrip(t) {
   const keys = Object.keys(STICKERS);
   const dogs = keys.filter(isDogStickerKey);
   const cats = keys.filter(k => !isDogStickerKey(k));
-  /* 曼谷：只顯示狗＋自家寵物；九州／其他：貓先、狗仍可選 */
+  /* 曼谷：只顯示狗＋自家寵物；九州：多元素貓先；其他：貓先、狗仍可選 */
   if (isBangkokTrip(t)) return dogs.length ? dogs : keys;
+  if (isKyushuTrip(t)) {
+    const multi = KZ_MULTI_KEYS.filter(k => STICKERS[k]);
+    const rest = cats.filter(k => !multi.includes(k));
+    return multi.concat(rest, dogs);
+  }
   return cats.concat(dogs);
 }
+const KZ_DAY_CATS = ['km08', 'km02', 'km09', 'km06', 'km01', 'km05', 'km03'];
+const KZ_MULTI_KEYS = ['km01','km02','km03','km04','km05','km06','km07','km08','km09','km10'];
 function dayDecorKey(t, d, dayIdx) {
   const i = dayIdx == null ? 0 : dayIdx;
   if (isBangkokTrip(t)) {
     if (d && d.cat && isDogStickerKey(d.cat) && STICKERS[d.cat]) return d.cat;
     if (d && d.cat && CAT_TO_DOG[d.cat]) return CAT_TO_DOG[d.cat];
     return BKK_DAY_DOGS[i % BKK_DAY_DOGS.length];
+  }
+  if (isKyushuTrip(t)) {
+    if (d && d.cat && /^km\d+$/.test(d.cat) && STICKERS[d.cat]) return d.cat;
+    return KZ_DAY_CATS[i % KZ_DAY_CATS.length];
   }
   return (d && d.cat) || 'maneki';
 }
@@ -860,10 +884,25 @@ function migrateBangkokStickers() {
   });
   return changed;
 }
-/* STICKERS 定義後先跑一次：曼谷日卡／已貼貓轉狗 */
+function migrateKyushuDayCats() {
+  let changed = false;
+  (APP.trips || []).forEach(t => {
+    if (!isKyushuTrip(t)) return;
+    (t.days || []).forEach((d, i) => {
+      const want = KZ_DAY_CATS[i % KZ_DAY_CATS.length];
+      if (d.cat !== want) { d.cat = want; changed = true; }
+    });
+  });
+  return changed;
+}
+/* STICKERS 定義後：曼谷轉狗；九州日卡換多元素貓 */
 (function(){
   try {
-    if (typeof APP !== 'undefined' && APP && migrateBangkokStickers()) persist();
+    if (typeof APP === 'undefined' || !APP) return;
+    let ch = false;
+    if (migrateBangkokStickers()) ch = true;
+    if (migrateKyushuDayCats()) ch = true;
+    if (ch) persist();
   } catch (e) {}
 })();
 

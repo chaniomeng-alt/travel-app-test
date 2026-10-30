@@ -1,5 +1,5 @@
 /* Station 6 — service worker（GitHub Pages 子路徑，全部用相對路徑） */
-const CACHE_VERSION = 'v6-23-guest-members';
+const CACHE_VERSION = 'v6-24-kz-multi';
 const CACHE_NAME = 'travel-app-' + CACHE_VERSION;
 const SHELL_URLS = [
   './index.html',
@@ -34,6 +34,16 @@ const SHELL_URLS = [
   './assets/stickers/sticker-dog-10.png',
   './assets/stickers/sticker-dog-11.png',
   './assets/stickers/sticker-dog-12.png',
+  './assets/stickers/kyushu-multi/sticker-01-yatai-ramen.png',
+  './assets/stickers/kyushu-multi/sticker-02-onsen.png',
+  './assets/stickers/kyushu-multi/sticker-03-luggage.png',
+  './assets/stickers/kyushu-multi/sticker-04-dazaifu.png',
+  './assets/stickers/kyushu-multi/sticker-05-ainoshima.png',
+  './assets/stickers/kyushu-multi/sticker-06-yamakasa.png',
+  './assets/stickers/kyushu-multi/sticker-07-souvenir.png',
+  './assets/stickers/kyushu-multi/sticker-08-kumamoto.png',
+  './assets/stickers/kyushu-multi/sticker-09-shinkansen.png',
+  './assets/stickers/kyushu-multi/sticker-10-sakura.png',
   './assets/stickers/sticker-jp-01.png',
   './assets/stickers/sticker-jp-02.png',
   './assets/stickers/sticker-jp-03.png',
