@@ -12,6 +12,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Decode .b64 into PNG
         run: |
           set -e
@@ -29,12 +31,21 @@ jobs:
           test "$count" -gt 0
       - name: Commit decoded PNGs
         run: |
+          set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p assets/covers assets/stickers
           git add assets/covers assets/stickers
           if git diff --staged --quiet; then
             echo "No PNG changes"
-          else
-            git commit -m "Add decoded cover and sticker PNGs"
-            git push
+            exit 0
           fi
+          git commit -m "Add decoded cover and sticker PNGs"
+          for i in 1 2 3 4 5; do
+            if git push; then
+              exit 0
+            fi
+            echo "push failed, rebase retry $i"
+            git pull --rebase origin main
+          done
+          exit 1
