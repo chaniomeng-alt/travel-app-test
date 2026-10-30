@@ -3615,7 +3615,26 @@ function initFirebase() {
     try { fbStorage = firebase.storage(); } catch (e) { console.warn('[storage] init', e); fbStorage = null; }
     try { fbDb.enablePersistence({ synchronizeTabs: true }).catch(() => {}); } catch (e) {}
     cloudReady = true;
+    let inviteMode = false;
+    try {
+      const q = new URLSearchParams(location.search || '');
+      inviteMode = q.get('invite') === '1' || q.get('share') === '1' || q.get('guest') === '1';
+    } catch (e) {}
+    if (inviteMode) {
+      try {
+        fbAuth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
+      } catch (e) { console.warn('[auth] persistence', e); }
+    }
+    let inviteDropDone = false;
     fbAuth.onAuthStateChanged(async (user) => {
+      /* 邀請連結：唔沿用本機主帳；先 drop session 再當未登入（避免短暫用主帳 sync） */
+      if (inviteMode && user && !inviteDropDone) {
+        inviteDropDone = true;
+        cloudSetStatus('邀請模式：已清除本機登入，請用同伴帳號登入');
+        try { await fbAuth.signOut(); } catch (e) {}
+        return;
+      }
+      if (inviteMode && !user) inviteDropDone = true;
       cloudUser = user || null;
       renderCloudAccountUI();
       if (user) {
@@ -3629,7 +3648,7 @@ function initFirebase() {
           cloudSetStatus('合併失敗：' + ((e && e.message) || '請稍後「立即同步」'));
         }
       } else {
-        cloudSetStatus('未登入');
+        cloudSetStatus(inviteMode ? '邀請模式・未登入（請用同伴帳號）' : '未登入');
       }
     });
     return true;
@@ -4028,11 +4047,12 @@ async function createCompanionAccount() {
 
     const line = $('companionCredLine');
     const res = $('companionResult');
-    const text = '電郵：' + email + '\n臨時密碼：' + tempPass + '\n已加入全部旅程：' + addedTitles.join('、');
+    const shareUrl = location.origin + location.pathname + '?invite=1';
+    const text = '網址：' + shareUrl + '\n電郵：' + email + '\n臨時密碼：' + tempPass + '\n已加入全部旅程：' + addedTitles.join('、') + '\n（請用同伴自己部手機／瀏覽器開；唔好喺管理員已登入嘅機開）';
     if (line) line.textContent = text;
     if (res) res.hidden = false;
-    window.__companionCopyText = email + '\n' + tempPass;
-    toast('已產生同伴帳號，請即複製密碼');
+    window.__companionCopyText = shareUrl + '\n' + email + '\n' + tempPass;
+    toast('已產生同伴帳號，請即複製（含邀請連結）');
     cloudSetStatus('同伴帳號已建立');
     if ($('companionEmail')) $('companionEmail').value = '';
   } catch (e) {

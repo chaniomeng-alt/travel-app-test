@@ -20,7 +20,7 @@
 /* SW escape: app.js crash 前都要跑；一次清舊 cache 再註冊，唔再卡死 */
 (function () {
   if (!('serviceWorker' in navigator)) return;
-  var WANT = 'v6-26-sw-escape';
+  var WANT = 'v6-27-auth-invite';
   var KEY = 'travel_sw_bust_v';
   function reg() {
     navigator.serviceWorker.register('./sw.js').then(function (reg) {
@@ -390,13 +390,13 @@
         <p class="hint" id="cloudForceHint" style="margin-top:8px">正常用「立即同步」。登入後預約附件會同步到雲端（上限約 8MB）。</p>
         <div id="companionBox" hidden style="margin-top:16px;padding-top:12px;border-top:1px solid var(--line,#e8e0d8)">
           <b style="display:block;margin-bottom:6px">產生同伴帳號</b>
-          <p class="hint" style="margin:0 0 8px">得管理員可見。產生電郵＋臨時密碼（只顯示一次），對方會自動加入你全部旅程。</p>
+          <p class="hint" style="margin:0 0 8px">得管理員可見。產生電郵＋臨時密碼（只顯示一次）。請複製「邀請連結＋帳密」畀同伴，用佢自己部手機開；連結會清走本機主帳登入。</p>
           <label>同伴電郵<input class="fld" type="email" id="companionEmail" autocomplete="off" placeholder="friend@example.com" style="width:100%;margin-top:6px"></label>
           <button type="button" class="btn" id="btnCreateCompanion" style="margin-top:10px;width:100%">產生帳號</button>
           <div id="companionResult" hidden style="margin-top:10px;padding:10px;border-radius:10px;background:rgba(0,0,0,.04)">
             <p style="margin:0 0 6px;font-weight:700">請即複製俾同伴（之後唔會再顯示密碼）</p>
             <p class="hint" id="companionCredLine" style="margin:0 0 8px;word-break:break-all"></p>
-            <button type="button" class="btn ghost" id="btnCopyCompanion" style="width:100%">複製電郵同密碼</button>
+            <button type="button" class="btn ghost" id="btnCopyCompanion" style="width:100%">複製邀請連結同帳密</button>
           </div>
         </div>
       </div>
