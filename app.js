@@ -138,8 +138,7 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 };
 
-let days = store.get('kz_days', null);
-if (!Array.isArray(days) || !days.length) days = [
+const KZ_DEFAULT_DAYS = [
   { dow:'Sun', n:22, title:'抵達熊本', route:'香港 → 福岡 → 熊本', hotel:'ドーミーイン熊本', hq:HQ_KUM, temp:[18,12], place:'熊本', cat:'maneki', items:[
     { time:'早上', ic:'bus', text:'金巴：澳門 → 香港機場' },
     { time:'12:55', ic:'plane', text:'UO638 · HKG 客運大樓 2 起飛', q:'香港國際機場 客運大樓2' },
@@ -189,17 +188,172 @@ if (!Array.isArray(days) || !days.length) days = [
   ]}
 ];
 
+
+/* ---------- multi-trip data layer (travel_app_v1) ---------- */
+const APP_KEY = 'travel_app_v1';
+const TYPE_OF_IC = { food:'food', train:'transport', bus:'transport', plane:'transport', bed:'hotel', pin:'sight', bag:'shop' };
+const TYPES = ['food', 'sight', 'transport', 'hotel', 'shop'];
+const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const pd = s => { const [y, m, d] = String(s).split('-').map(Number); return new Date(y, m - 1, d); };
+const isoDate = dt => dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
+const dowOf = d => WD[pd(d.date).getDay()];
+const dayNum = d => pd(d.date).getDate();
+const monOf = d => MON[pd(d.date).getMonth()];
+const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+function normItem(it) {
+  const o = Object.assign({}, it);
+  if (!TYPES.includes(o.type)) o.type = TYPE_OF_IC[o.ic] || 'sight';
+  if (typeof o.note !== 'string') o.note = '';
+  if (!(+o.cost >= 0)) o.cost = 0; else o.cost = +o.cost;
+  return o;
+}
+function tripStatus(t, now) {
+  const today = isoDate(now || new Date());
+  if (today < t.startDate) return 'planning';
+  if (today > t.endDate) return 'done';
+  return 'ongoing';
+}
+const KZ_BOOKINGS = {
+  flights: [
+    { id:'f1', route:'香港 → 福岡', from:'HKG', to:'FUK', dep:'12:55', arr:'17:00', flightNo:'UO638', date:'2026-11-22', note:'香港國際機場 客運大樓 2 → 福岡國際機場 國際線航廈' },
+    { id:'f2', route:'福岡 → 香港', from:'FUK', to:'HKG', dep:'12:50', arr:'15:50', flightNo:'UO601', date:'2026-11-28', note:'福岡國際機場 → 香港國際機場' }
+  ],
+  stays: [
+    { id:'s1', name:'天然温泉 六花の湯 ドーミーイン熊本', dates:'11/22（入住 20:00 後）– 11/24（退房 11:00）', checkIn:'2026-11-22', checkOut:'2026-11-24', meta:'方便黑川日歸早班巴士', q:'ドーミーイン熊本' },
+    { id:'s2', name:'天然温泉 鶴港の湯 ドーミーイン PREMIUM 長崎駅前', dates:'11/24（入住 15:00 後）– 11/26（退房 11:00 前）', checkIn:'2026-11-24', checkOut:'2026-11-26', meta:'2 晚 · 標準雙人房 · 含早餐 · 長崎站前，方便軍艦島碼頭', q:'ドーミーイン PREMIUM 長崎駅前' },
+    { id:'s3', name:'西鉄ホテル クルーム博多', dates:'11/26（15:00 入住）– 11/28（11:00 前退房）', checkIn:'2026-11-26', checkOut:'2026-11-28', meta:'博多駅前 1-17-6 · 單人房禁煙 · 天然温泉博多駅前の湯 · 方便市內散策同機場', q:'西鉄ホテル クルーム博多', sticker:'bowl' }
+  ]
+};
+const KZ_DEFAULT_TODOS = [
+  { t: '買北九州 5 日券（官網最平）', d: 0 },
+  { t: '確認 11/22 傍晚新幹線班次', d: 0 },
+  { t: '黑川溫泉巴士預約', d: 0 },
+  { t: '軍艦島登島票', d: 0 },
+  { t: '貓島渡輪 或 大濠公園計劃', d: 0 },
+  { t: '換日圓 / 交通卡', d: 0 }
+];
+const KZ_DEFAULT_SHOP = [
+  { id: 1, n: '努努雞', note: '', cat: '零食', pri: 0, done: 0, img: '' },
+  { id: 2, n: '明太子', note: '', cat: '零食', pri: 0, done: 0, img: '' },
+  { id: 3, n: '鹽昆布', note: '', cat: '零食', pri: 0, done: 0, img: '' }
+];
+function toDays(src, start) {
+  const s0 = pd(start);
+  return src.map((d, i) => {
+    const o = Object.assign({}, d);
+    let dt = new Date(s0); dt.setDate(s0.getDate() + i);
+    if (typeof o.n === 'number') { const c = new Date(s0); c.setDate(o.n); if (c >= s0) dt = c; }
+    if (!o.date) o.date = isoDate(dt);
+    delete o.dow; delete o.n;
+    o.items = (o.items || []).map(normItem);
+    return o;
+  });
+}
+function createTrip(opts) {
+  opts = opts || {};
+  const start = opts.startDate || isoDate(new Date()), end = opts.endDate || start;
+  const t = {
+    id: opts.id || uid('t'), title: opts.title || '新旅程', destination: opts.destination || '',
+    startDate: start, endDate: end, cover: opts.cover || '', currency: opts.currency || 'JPY',
+    days: opts.days || [], bookings: opts.bookings || { flights: [], stays: [] },
+    budget: opts.budget || { total: 0, rate: 0.052, expenses: [] },
+    shop: opts.shop || [], todos: opts.todos || [], members: opts.members || []
+  };
+  if (!t.days.length) for (let d = pd(start); d <= pd(end); d.setDate(d.getDate() + 1)) t.days.push({ date: isoDate(d), title: '', items: [] });
+  if (APP && !opts._noAdd) { APP.trips.push(t); persist(); }
+  return t;
+}
+function migrate() {
+  const old = k => store.get(k, undefined);
+  const oldDays = old('kz_days');
+  const exps = old('kz_exp');
+  const settings = { theme: old('kz_theme') ?? 6, fs: old('kz_fs') ?? 16, fx: old('kz_fx') ?? 'leaf' };
+  const shop = old('kz_shop2');
+  const todos = old('kz_todos');
+  const t1 = createTrip({
+    id: 't1', title: '九州小旅', destination: '九州', startDate: '2026-11-22', endDate: '2026-11-28', currency: 'JPY',
+    days: toDays(Array.isArray(oldDays) && oldDays.length ? oldDays : KZ_DEFAULT_DAYS, '2026-11-22'),
+    bookings: JSON.parse(JSON.stringify(KZ_BOOKINGS)),
+    budget: { total: +old('kz_budget') || 0, rate: +old('kz_rate') || 0.052, expenses: Array.isArray(exps) ? exps : [] },
+    shop: Array.isArray(shop) ? shop : KZ_DEFAULT_SHOP.map(x => Object.assign({}, x)),
+    todos: Array.isArray(todos) ? todos : KZ_DEFAULT_TODOS.map(x => Object.assign({}, x)),
+    members: [], _noAdd: true
+  });
+  return { version: 1, activeTripId: 't1', settings, trips: [t1] };
+}
+let APP = null;
+function persist() { store.set(APP_KEY, APP); }
+function loadApp() {
+  const a = store.get(APP_KEY, null);
+  if (a && a.version === 1 && Array.isArray(a.trips) && a.trips.length) {
+    a.trips.forEach(t => (t.days || []).forEach(d => d.items = (d.items || []).map(normItem)));
+    if (!a.trips.some(t => t.id === a.activeTripId)) a.activeTripId = a.trips[0].id;
+    a.settings = a.settings || {};
+    return a;
+  }
+  return migrate();
+}
+APP = loadApp(); persist();
+function getTrip(id) { return APP.trips.find(t => t.id === (id || APP.activeTripId)) || APP.trips[0]; }
+function saveTrip(t) {
+  if (t) { const i = APP.trips.findIndex(x => x.id === t.id); if (i >= 0) APP.trips[i] = t; else APP.trips.push(t); }
+  persist();
+}
+function deleteTrip(id) {
+  if (APP.trips.length <= 1) return false;
+  APP.trips = APP.trips.filter(t => t.id !== id);
+  if (APP.activeTripId === id) APP.activeTripId = APP.trips[0].id;
+  persist(); return true;
+}
+function setActiveTrip(id) { if (APP.trips.some(t => t.id === id)) { APP.activeTripId = id; persist(); return true; } return false; }
+function getSetting(k, f) { return APP.settings[k] ?? f; }
+function setSetting(k, v) { APP.settings[k] = v; persist(); }
+window.TripStore = { getTrip, saveTrip, createTrip, deleteTrip, setActiveTrip, tripStatus, get app() { return APP; } };
+
+const trip = getTrip();
+let days = trip.days;
+
+/* ---------- bookings (from trip data) ---------- */
+(function renderBookings() {
+  const b = trip.bookings || { flights: [], stays: [] };
+  const fmtD = s => { const d = pd(s); return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} 週${'日一二三四五六'[d.getDay()]}`; };
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  document.getElementById('flightCount').textContent = b.flights.length;
+  document.getElementById('stayCount').textContent = b.stays.length;
+  document.getElementById('flightList').outerHTML = b.flights.map((f, i) => `<div class="card pass">
+      <div class="pass-top">
+        <div class="lbl">BOARDING PASS</div>
+        <div class="rt">${esc(f.route)}</div>
+        <div class="pass-main">
+          <div><div class="code">${esc(f.from)}</div><small>出發</small><div class="tm">${esc(f.dep)}</div></div>
+          <div class="mid"><svg class="ic" viewBox="0 0 24 24" id="ic-plane${i + 2}">${IC.plane}</svg></div>
+          <div style="text-align:right"><div class="code">${esc(f.to)}</div><small>抵達</small><div class="tm">${esc(f.arr)}</div></div>
+        </div>
+      </div>
+      <div class="pass-foot"><div>航班編號<b>${esc(f.flightNo)}</b></div><div style="text-align:right">日期<b>${fmtD(f.date)}</b></div></div>
+      <div class="pass-note">${esc(f.note)}</div>
+    </div>`).join('\n');
+  document.getElementById('stayList').outerHTML = b.stays.map(s => `<div class="card">
+      <div class="stay-name">${esc(s.name)}</div>
+      <div class="stay-date">${esc(s.dates)}</div>
+      <div class="stay-meta">${esc(s.meta)}</div>
+      <a class="maplink" href="${esc(gmap(s.q || s.name))}" target="_blank" rel="noopener"><svg class="ic" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>Google 地圖</a>${s.sticker ? `
+      <div class="sticker bob corner" id="stk-${s.sticker}"></div>` : ''}
+    </div>`).join('\n');
+})();
+
 /* ---------- itinerary ---------- */
 const chipsEl = document.getElementById('chips');
 days.forEach((d, i) => {
   const b = document.createElement('button');
   b.className = 'chip' + (i === 0 ? ' active' : '');
-  b.innerHTML = `<small>${d.dow}</small><b>${d.n}</b>`;
+  b.innerHTML = `<small>${dowOf(d)}</small><b>${dayNum(d)}</b>`;
   b.onclick = () => showDay(i);
   chipsEl.appendChild(b);
 });
 let currentDay = 0;
-function saveDays() { store.set('kz_days', days); }
+function saveDays() { saveTrip(trip); }
 function showDay(i) {
   currentDay = i;
   const d = days[i];
@@ -211,7 +365,7 @@ function showDay(i) {
   document.getElementById('dayCard').innerHTML = `
     <div class="day-head">
       <div>
-        <div class="day-date"><span class="dow">${d.dow}</span><span class="num">${d.n}</span><span class="mon">Nov</span></div>
+        <div class="day-date"><span class="dow">${dowOf(d)}</span><span class="num">${dayNum(d)}</span><span class="mon">${monOf(d)}</span></div>
         <div class="day-title">Day ${i + 1} ${d.title}</div>
         <div class="day-route">✓ ${d.route}</div>
       </div>
@@ -270,7 +424,7 @@ function showDay(i) {
     const txt = document.getElementById('newText').value.trim();
     if (!txt) return;
     const q = document.getElementById('newMap').value.trim();
-    const item = { time: t, ic: 'pin', text: txt };
+    const item = normItem({ time: t, ic: 'pin', text: txt });
     if (q) item.q = q;
     d.items.push(item);
     document.getElementById('newTime').value = '';
@@ -291,7 +445,7 @@ document.getElementById('stk-bowl').innerHTML = cat('bowl');
 document.getElementById('stk-todo').innerHTML = cat('ramen');
 
 /* ---------- countdown ---------- */
-const target = new Date('2026-11-22T00:00:00+08:00').getTime();
+const target = new Date(trip.startDate + 'T00:00:00+08:00').getTime();
 function tick() {
   const now = Date.now(), diff = target - now;
   const cd = document.getElementById('cd'), bar = document.getElementById('bar'), plane = document.getElementById('plane');
@@ -315,14 +469,7 @@ document.querySelectorAll('#nav button').forEach(b => b.onclick = () => {
 /* ---------- storage helpers ---------- */
 
 /* ---------- todo ---------- */
-let todos = store.get('kz_todos', [
-  { t: '買北九州 5 日券（官網最平）', d: 0 },
-  { t: '確認 11/22 傍晚新幹線班次', d: 0 },
-  { t: '黑川溫泉巴士預約', d: 0 },
-  { t: '軍艦島登島票', d: 0 },
-  { t: '貓島渡輪 或 大濠公園計劃', d: 0 },
-  { t: '換日圓 / 交通卡', d: 0 }
-]);
+let todos = trip.todos;
 function renderTodos() {
   const box = document.getElementById('todoList');
   box.innerHTML = '';
@@ -339,7 +486,7 @@ function renderTodos() {
   document.getElementById('todoPct').textContent = `${done}/${todos.length} · ${pct}%`;
   document.getElementById('todoBar').style.width = pct + '%';
 }
-function save() { store.set('kz_todos', todos); renderTodos(); }
+function save() { trip.todos = todos; saveTrip(trip); renderTodos(); }
 document.getElementById('todoAdd').onclick = () => {
   const inp = document.getElementById('todoNew'), v = inp.value.trim();
   if (!v) return; todos.push({ t: v, d: 0 }); inp.value = ''; save();
@@ -357,16 +504,16 @@ function applyTheme(i) {
   root.setProperty('--tint', `color-mix(in srgb, ${a} 14%, #FFFBF0)`);
   document.querySelectorAll('.sw').forEach((e, k) => e.classList.toggle('on', k === i));
   document.getElementById('themeName').textContent = '目前：' + themeNames[i];
-  store.set('kz_theme', i);
+  setSetting('theme', i);
 }
 const swBox = document.getElementById('swatches');
 themes.forEach((t, i) => { const b = document.createElement('button'); b.className = 'sw'; b.style.background = t[0]; b.setAttribute('aria-label', themeNames[i]); b.onclick = () => applyTheme(i); swBox.appendChild(b); });
-applyTheme(store.get('kz_theme', 6));
+applyTheme(getSetting('theme', 6));
 
 const fs = document.getElementById('fs');
-function applyFs(v) { document.documentElement.style.fontSize = v + 'px'; document.getElementById('fsVal').textContent = v + 'px'; fs.value = v; store.set('kz_fs', v); }
+function applyFs(v) { document.documentElement.style.fontSize = v + 'px'; document.getElementById('fsVal').textContent = v + 'px'; fs.value = v; setSetting('fs', v); }
 fs.oninput = () => applyFs(+fs.value);
-applyFs(store.get('kz_fs', 16));
+applyFs(getSetting('fs', 16));
 
 /* ---------- falling effects ---------- */
 const FX = [['none', '✕', '無'], ['sakura', '🌸', '櫻花'], ['leaf', '🍁', '秋葉']];
@@ -396,20 +543,21 @@ FX.forEach(([k, e, t]) => {
 function setFx(k) {
   curFx = k; buildFx(k);
   fxGrid.querySelectorAll('.fx').forEach(b => b.classList.toggle('on', b.dataset.k === k));
-  store.set('kz_fx', k);
+  setSetting('fx', k);
 }
 document.getElementById('fab').onclick = () => setFx(FX[(FX.findIndex(f => f[0] === curFx) + 1) % FX.length][0]);
-const savedFx = store.get('kz_fx', 'leaf');
+const savedFx = getSetting('fx', 'leaf');
 setFx(FX.some(f => f[0] === savedFx) ? savedFx : 'leaf');
 
 /* ---------- budget & currency ---------- */
 const $ = id => document.getElementById(id);
 $('stk-bud').innerHTML = cat('shop');
 const CATS = [['food','餐飲','food'],['transport','交通','train'],['stay','住宿','bed'],['sight','觀光','pin'],['shop','購物','bag'],['other','其他','box']];
-let budget = +store.get('kz_budget', 0) || 0;
-let rate = +store.get('kz_rate', 0.052) || 0.052;
-let exps = store.get('kz_exp', []);
-if (!Array.isArray(exps)) exps = [];
+let budget = +trip.budget.total || 0;
+let rate = +trip.budget.rate || 0.052;
+if (!Array.isArray(trip.budget.expenses)) trip.budget.expenses = [];
+let exps = trip.budget.expenses;
+const saveBudget = () => { trip.budget.total = budget; trip.budget.rate = rate; trip.budget.expenses = exps; saveTrip(trip); };
 const money = n => '$' + Math.round(n).toLocaleString('en-US');
 const fmt = n => (isFinite(n) && n) ? String(Math.round(n * 100) / 100) : '';
 
@@ -423,7 +571,7 @@ jpy.oninput = () => { hkd.value = jpy.value === '' ? '' : fmt(+jpy.value * rate)
 hkd.oninput = () => { jpy.value = hkd.value === '' ? '' : fmt(+hkd.value / rate); };
 rateIn.onchange = () => {
   const v = +rateIn.value;
-  if (v > 0) { rate = v; store.set('kz_rate', v); if (jpy.value !== '') jpy.oninput(); }
+  if (v > 0) { rate = v; saveBudget(); if (jpy.value !== '') jpy.oninput(); }
   rateIn.value = rate.toFixed(4);
 };
 $('rateUpd').onclick = async () => {
@@ -434,7 +582,7 @@ $('rateUpd').onclick = async () => {
       const d = await (await fetch(u)).json();
       const v = d.rates && d.rates.HKD;
       if (v > 0) {
-        rate = v; store.set('kz_rate', v); rateIn.value = v.toFixed(4);
+        rate = v; saveBudget(); rateIn.value = v.toFixed(4);
         if (jpy.value !== '') jpy.oninput();
         note.textContent = '已更新（' + new Date().toLocaleDateString('zh-HK') + '）';
         return;
@@ -448,14 +596,14 @@ $('setBudBtn').onclick = () => {
   const p = $('budPanel'); p.hidden = !p.hidden;
   if (!p.hidden) { $('budIn').value = budget || ''; $('budIn').focus(); }
 };
-$('budSave').onclick = () => { budget = Math.max(0, +$('budIn').value || 0); store.set('kz_budget', budget); $('budPanel').hidden = true; renderBudget(); };
+$('budSave').onclick = () => { budget = Math.max(0, +$('budIn').value || 0); saveBudget(); $('budPanel').hidden = true; renderBudget(); };
 $('expToggle').onclick = () => { $('expPanel').hidden = !$('expPanel').hidden; };
 $('expAdd').onclick = () => {
   const a = +$('expAmt').value, cur = $('expCur').value, cat = $('expCat').value;
   if (!(a > 0)) { $('expAmt').focus(); return; }
   const n = $('expName').value.trim() || CATS.find(c => c[0] === cat)[1];
   exps.unshift({ id: Date.now(), n, a, cur, hkd: cur === 'JPY' ? a * rate : a, cat });
-  store.set('kz_exp', exps);
+  saveBudget();
   $('expName').value = ''; $('expAmt').value = ''; $('expPanel').hidden = true;
   renderBudget();
 };
@@ -487,7 +635,7 @@ function renderBudget() {
     r.className = 'exp';
     r.innerHTML = `<div class="cat-ic">${ic(c[2])}</div><div class="exp-m"><div class="exp-n"></div><div class="exp-s">${c[1]}</div></div><div class="exp-a"><b>${money(e.hkd)}</b><small>${e.cur === 'JPY' ? '¥' + Math.round(e.a).toLocaleString('en-US') : 'HKD'}</small></div><button class="del" aria-label="刪除">×</button>`;
     r.querySelector('.exp-n').textContent = e.n;
-    r.querySelector('.del').onclick = () => { exps = exps.filter(x => x.id !== e.id); store.set('kz_exp', exps); renderBudget(); };
+    r.querySelector('.del').onclick = () => { exps = exps.filter(x => x.id !== e.id); saveBudget(); renderBudget(); };
     box.appendChild(r);
   });
 }
@@ -574,16 +722,11 @@ $('pgirl').innerHTML = person('girl');
 $('pboy').innerHTML = person('boy');
 
 const SCATS = ['零食', '藥妝', '服飾', '紀念品', '其他'];
-let shop = store.get('kz_shop2', null);
-if (!Array.isArray(shop)) shop = [
-  { id: 1, n: '努努雞', note: '', cat: '零食', pri: 0, done: 0, img: '' },
-  { id: 2, n: '明太子', note: '', cat: '零食', pri: 0, done: 0, img: '' },
-  { id: 3, n: '鹽昆布', note: '', cat: '零食', pri: 0, done: 0, img: '' }
-];
+let shop = trip.shop;
 $('spCat').innerHTML = SCATS.map(c => `<option>${c}</option>`).join('');
 $('spFilter').onchange = () => renderShop();
 let spImgData = '';
-const saveShop = () => store.set('kz_shop2', shop);
+const saveShop = () => { trip.shop = shop; saveTrip(trip); };
 
 function readImg(file) {
   return new Promise(res => {
