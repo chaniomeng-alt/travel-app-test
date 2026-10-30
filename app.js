@@ -476,6 +476,7 @@ function ensurePartyMembers() {
       if (!m) return;
       if (!m.id) { m.id = uid('m'); changed = true; }
       if (m.role == null) { m.role = '旅客'; changed = true; }
+      if (m.description == null) { m.description = ''; changed = true; }
       if (!m.avatar) {
         m.avatar = isBangkokTrip(t)
           ? 'assets/stickers/pets/sticker-dog-white-tan.png'
@@ -986,7 +987,10 @@ function renderHome() {
     L.appendChild(c);
   });
 }
-document.addEventListener('click', e => { if (!e.target.closest('.trip-menu,.trip-more')) document.querySelectorAll('.trip-menu').forEach(m => m.remove()); });
+document.addEventListener('click', e => {
+  if (!e.target.closest('.trip-menu,.trip-more')) document.querySelectorAll('.trip-menu').forEach(m => m.remove());
+  if (!e.target.closest('.item-menu,.item-more,.item-more-wrap')) document.querySelectorAll('.item-menu').forEach(m => m.remove());
+});
 function askDelete(t) {
   const M = document.getElementById('confirmModal');
   document.getElementById('cfMsg').textContent = APP.trips.length <= 1 ? '至少要保留一個旅程，所以唔可以刪除。' : `「${t.title}」同入面所有行程、預算、清單都會刪除，冇得還原。`;
@@ -1486,6 +1490,7 @@ function openMemModal(edit) {
   $('memTitle').textContent = edit ? '編輯成員' : '新增成員';
   $('memName').value = edit ? (edit.name || '') : '';
   $('memRole').value = edit ? (edit.role || '') : '旅客';
+  if ($('memDesc')) $('memDesc').value = edit ? (edit.description || '') : '';
   $('memErr').textContent = '';
   $('memAvNote').textContent = '約 200px，自動縮細';
   setMemPreview(memPendingAv);
@@ -1505,11 +1510,17 @@ function renderMembers() {
     mem.forEach((m, idx) => {
       const card = document.createElement('div');
       card.className = 'card mem-card';
-      card.innerHTML = `${memAvatarHTML(m)}<div class="mem-info"><b></b><small></small></div><div class="mem-acts"><button type="button" class="ghost sm" data-a="edit">編輯</button><button type="button" class="ghost sm danger-text" data-a="del">刪除</button></div>`;
+      card.innerHTML = `${memAvatarHTML(m)}<div class="mem-info"><b></b><span class="mem-desc"></span></div><div class="mem-acts"><button type="button" class="item-more" aria-label="更多">⋮</button></div>`;
       card.querySelector('b').textContent = m.name || '未命名';
-      card.querySelector('small').textContent = m.role || '旅客';
-      card.querySelector('[data-a="edit"]').onclick = () => openMemModal(m);
-      card.querySelector('[data-a="del"]').onclick = () => {
+      const descEl = card.querySelector('.mem-desc');
+      if (m.description) {
+        descEl.textContent = m.description;
+        descEl.classList.remove('is-role');
+      } else {
+        descEl.textContent = m.role || '旅客';
+        descEl.classList.add('is-role');
+      }
+      const deleteMember = () => {
         confirmAsk(`刪除成員「${m.name || ''}」？相關預約分攤同支出付款人會一併清走標記。`, () => {
           const id = m.id;
           t.members = (t.members || []).filter(x => x.id !== id);
@@ -1527,6 +1538,22 @@ function renderMembers() {
           saveMembers();
           renderMembers();
         });
+      };
+      card.querySelector('.item-more').onclick = e => {
+        e.stopPropagation();
+        const wrap = card.querySelector('.mem-acts');
+        const open = wrap.querySelector('.item-menu');
+        document.querySelectorAll('.item-menu').forEach(x => x.remove());
+        if (open) return;
+        const menu = document.createElement('div'); menu.className = 'item-menu';
+        menu.innerHTML = '<button type="button" data-a="edit">編輯</button><button type="button" data-a="del" class="danger">刪除</button>';
+        menu.onclick = ev => {
+          ev.stopPropagation();
+          const a = ev.target.dataset.a; menu.remove();
+          if (a === 'edit') openMemModal(m);
+          if (a === 'del') deleteMember();
+        };
+        wrap.appendChild(menu);
       };
       list.appendChild(card);
     });
@@ -1580,12 +1607,14 @@ if ($('memSave')) $('memSave').onclick = () => {
   const name = $('memName').value.trim();
   if (!name) { $('memErr').textContent = '請填名稱'; return; }
   const role = $('memRole').value.trim() || '旅客';
+  const description = ($('memDesc') ? $('memDesc').value.trim() : '') || '';
   const t = getTrip();
   if (!Array.isArray(t.members)) t.members = [];
   if (memEdit) {
-    memEdit.name = name; memEdit.role = role; memEdit.avatar = memPendingAv || memEdit.avatar || '';
+    memEdit.name = name; memEdit.role = role; memEdit.description = description;
+    memEdit.avatar = memPendingAv || memEdit.avatar || '';
   } else {
-    t.members.push({ id: uid('m'), name, role, avatar: memPendingAv || DEFAULT_AVATARS[0].src });
+    t.members.push({ id: uid('m'), name, role, description, avatar: memPendingAv || DEFAULT_AVATARS[0].src });
   }
   if (typeof trip !== 'undefined' && trip && trip.id === t.id) trip.members = t.members;
   saveMembers();
@@ -1605,7 +1634,11 @@ function renderPartyCard() {
   const pl = $('partyList');
   if (!mem.length && !pax) pl.innerHTML = '<p class="hint" style="margin:0">未有人員——去「成員」分頁新增</p>';
   else {
-    const rows = mem.map(m => `<div class="party-row">${partyAvHTML(m)}<div><b>${escH(m.name)}</b><small>${escH(m.role || '旅客')}</small></div></div>`).join('');
+    const rows = mem.map(m => {
+      const sub = m.description || m.role || '旅客';
+      const subCls = m.description ? ' style="color:var(--pri);font-weight:600"' : '';
+      return `<div class="party-row">${partyAvHTML(m)}<div><b>${escH(m.name)}</b><small${subCls}>${escH(sub)}</small></div></div>`;
+    }).join('');
     const extra = (pax > mem.length) ? `<p class="hint" style="margin:8px 0 0">預約顯示共 ${pax} 人（Outlook 未見第二位姓名）</p>` : '';
     pl.innerHTML = rows + extra;
   }
@@ -1759,13 +1792,73 @@ document.querySelectorAll('#bkTabs .tab').forEach(b => b.onclick = () => {
   document.querySelectorAll('#bkTabs .tab').forEach(x => x.classList.toggle('on', x === b));
   bkFilter = b.dataset.bk; renderBookings();
 });
-async function openBkFile(fileId) {
-  const blob = await idbGet(fileId);
-  if (!blob) return alert('搵唔到上載檔案');
-  const url = URL.createObjectURL(blob);
-  window.open(url, '_blank');
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
+let bkFileObjectUrl = '';
+function closeFileView() {
+  const M = $('fileViewModal');
+  if (M) M.hidden = true;
+  const body = $('fileViewBody');
+  if (body) body.innerHTML = '';
+  if (bkFileObjectUrl) {
+    try { URL.revokeObjectURL(bkFileObjectUrl); } catch (e) {}
+    bkFileObjectUrl = '';
+  }
 }
+async function openBkFile(fileId) {
+  if (!fileId) return alert('未有上載檔案');
+  let blob = null;
+  try { blob = await idbGet(fileId); } catch (e) { return alert('讀取檔案失敗'); }
+  if (!blob) return alert('搵唔到上載檔案（附件只存本機；換機或清資料後要重新上載）');
+  const mime = String(blob.type || '').toLowerCase();
+  const url = URL.createObjectURL(blob);
+  if (bkFileObjectUrl) { try { URL.revokeObjectURL(bkFileObjectUrl); } catch (e) {} }
+  bkFileObjectUrl = url;
+  const body = $('fileViewBody');
+  const title = $('fileViewTitle');
+  if (!body || !$('fileViewModal')) {
+    /* fallback if modal missing */
+    const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener';
+    a.download = 'booking-file'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) {} }, 60000);
+    return;
+  }
+  body.innerHTML = '';
+  const isImg = mime.startsWith('image/');
+  const isPdf = mime.includes('pdf');
+  if (title) title.textContent = isImg ? '睇相片' : (isPdf ? '睇 PDF' : '睇檔案');
+  if (isImg) {
+    const img = document.createElement('img');
+    img.src = url; img.alt = '預約附件';
+    body.appendChild(img);
+  } else if (isPdf) {
+    const iframe = document.createElement('iframe');
+    iframe.src = url; iframe.title = 'PDF 預覽';
+    body.appendChild(iframe);
+  } else {
+    const p = document.createElement('p');
+    p.className = 'hint'; p.style.margin = '16px';
+    p.textContent = '呢個檔案類型唔能直接預覽，請撳下載或用瀏覽器開啟。';
+    body.appendChild(p);
+  }
+  const dl = $('fileViewDl');
+  if (dl) {
+    dl.href = url;
+    let ext = '';
+    if (isPdf) ext = '.pdf';
+    else if (mime.includes('png')) ext = '.png';
+    else if (mime.includes('webp')) ext = '.webp';
+    else if (mime.includes('gif')) ext = '.gif';
+    else if (isImg) ext = '.jpg';
+    dl.download = 'booking-file' + ext;
+  }
+  $('fileViewModal').hidden = false;
+}
+if ($('fileViewClose')) $('fileViewClose').onclick = () => closeFileView();
+if ($('fileViewModal')) $('fileViewModal').addEventListener('click', e => { if (e.target === $('fileViewModal')) closeFileView(); });
+if ($('fileViewOpen')) $('fileViewOpen').onclick = () => {
+  if (!bkFileObjectUrl) return;
+  const w = window.open(bkFileObjectUrl, '_blank');
+  if (!w) alert('瀏覽器阻擋咗新分頁，請改用「下載」');
+};
 function renderBookings() {
   const b = trip.bookings;
   const box = $('bookAll');
@@ -1788,7 +1881,7 @@ function renderBookings() {
         <div class="pass-foot"><div>航班編號<b>${escH(f.flightNo)}</b></div><div style="text-align:right">日期<b>${fmtBkDate(f.date)}</b></div></div>
         ${f.note ? `<div class="pass-note">${escH(f.note)}</div>` : ''}
         ${bkPeopleNote(f)}
-        ${f.fileId ? `<span class="file-badge">已上載 PDF／相片</span>` : ''}
+        ${f.fileId ? `<button type="button" class="file-badge" data-a="file">已上載 PDF／相片 · 撳睇</button>` : ''}
         <div class="bk-actions">
           <button class="ghost sm" data-a="edit">編輯</button>
           ${f.fileId ? `<button class="ghost sm" data-a="file">睇檔案</button>` : ''}
@@ -1806,7 +1899,7 @@ function renderBookings() {
         <div class="stay-meta">${escH(s.addr || s.meta || s.note || '')}</div>
         <a class="maplink" href="${escH(gmap(s.q || s.name))}" target="_blank" rel="noopener">${ic('pin')}Google 地圖</a>
         ${bkPeopleNote(s, ' style="margin-top:8px"')}
-        ${s.fileId ? `<span class="file-badge">已上載 PDF／相片</span>` : ''}
+        ${s.fileId ? `<button type="button" class="file-badge" data-a="file">已上載 PDF／相片 · 撳睇</button>` : ''}
         <div class="bk-actions">
           <button class="ghost sm" data-a="edit">編輯</button>
           ${s.fileId ? `<button class="ghost sm" data-a="file">睇檔案</button>` : ''}
@@ -2004,6 +2097,7 @@ let shop = trip.shop || [];
 $('spCat').innerHTML = SCATS.map(c => `<option>${c}</option>`).join('');
 $('spFilter').onchange = () => renderShop();
 let spImgData = '';
+let spEdit = null;
 const saveShop = () => { trip.shop = shop; saveTrip(trip); };
 function readImg(file) {
   return new Promise(res => {
@@ -2024,33 +2118,99 @@ function readImg(file) {
     fr.readAsDataURL(file);
   });
 }
+function resetShopForm() {
+  spEdit = null;
+  $('spName').value = ''; $('spNote').value = ''; $('spImg').value = '';
+  spImgData = '';
+  $('spPrev').hidden = true; $('spImgNote').textContent = '可選';
+  if ($('spCat').options.length) $('spCat').selectedIndex = 0;
+  $('spPri').value = '0';
+  $('spAdd').textContent = '加入清單';
+  if ($('spCancel')) $('spCancel').hidden = true;
+  if ($('spDel')) $('spDel').hidden = true;
+}
+function openShopEdit(it) {
+  document.querySelectorAll('.item-menu').forEach(m => m.remove());
+  spEdit = it || null;
+  $('spPanel').hidden = false;
+  $('spName').value = it ? (it.n || '') : '';
+  $('spNote').value = it ? (it.note || '') : '';
+  if (it && it.cat) $('spCat').value = it.cat;
+  else if ($('spCat').options.length) $('spCat').selectedIndex = 0;
+  $('spPri').value = String(it && it.pri != null ? it.pri : 0);
+  spImgData = (it && it.img) ? it.img : '';
+  $('spPrev').hidden = !spImgData;
+  if (spImgData) $('spPrev').src = spImgData;
+  $('spImgNote').textContent = spImgData ? '已加相' : '可選';
+  $('spAdd').textContent = it ? '儲存修改' : '加入清單';
+  if ($('spCancel')) $('spCancel').hidden = !it;
+  if ($('spDel')) $('spDel').hidden = !it;
+  setTimeout(() => $('spName').focus(), 50);
+}
 $('spImg').onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
   spImgData = await readImg(f);
   $('spPrev').hidden = !spImgData; $('spPrev').src = spImgData;
   $('spImgNote').textContent = spImgData ? '已加相' : '讀取相片失敗';
 };
-$('spToggle').onclick = () => { $('spPanel').hidden = !$('spPanel').hidden; if (!$('spPanel').hidden) $('spName').focus(); };
+$('spToggle').onclick = () => {
+  if ($('spPanel').hidden) openShopEdit(null);
+  else { $('spPanel').hidden = true; resetShopForm(); }
+};
+if ($('spCancel')) $('spCancel').onclick = () => { $('spPanel').hidden = true; resetShopForm(); };
+if ($('spDel')) $('spDel').onclick = () => {
+  if (!spEdit) return;
+  const target = spEdit;
+  confirmAsk('刪除呢件購物項目？', () => {
+    shop = shop.filter(x => x.id !== target.id);
+    saveShop();
+    $('spPanel').hidden = true; resetShopForm();
+    renderShop();
+  });
+};
 $('spAdd').onclick = () => {
   const n = $('spName').value.trim();
   if (!n) { $('spName').focus(); return; }
-  shop.unshift({ id: Date.now(), n, note: $('spNote').value.trim(), cat: $('spCat').value, pri: +$('spPri').value, done: 0, img: spImgData });
+  if (spEdit) {
+    spEdit.n = n;
+    spEdit.note = $('spNote').value.trim();
+    spEdit.cat = $('spCat').value;
+    spEdit.pri = +$('spPri').value;
+    spEdit.img = spImgData || '';
+  } else {
+    shop.unshift({ id: Date.now(), n, note: $('spNote').value.trim(), cat: $('spCat').value, pri: +$('spPri').value, done: 0, img: spImgData });
+  }
   saveShop();
-  $('spName').value = ''; $('spNote').value = ''; $('spImg').value = ''; spImgData = '';
-  $('spPrev').hidden = true; $('spImgNote').textContent = '可選'; $('spPanel').hidden = true;
+  $('spPanel').hidden = true;
+  resetShopForm();
   renderShop();
 };
 function shopCard(it) {
   const d = document.createElement('div');
   d.className = 'card shop-item' + (it.done ? ' done' : '');
   const priLab = it.pri === 2 ? '必買' : it.pri === 1 ? '重要' : '一般';
-  d.innerHTML = `<input type="checkbox" class="chk" ${it.done ? 'checked' : ''} aria-label="已購買">${it.img ? '<img class="thumb" alt="">' : ''}<div class="si-main"><div class="si-name"></div><div class="si-note"></div><div class="tags"><span class="tag t-cat"></span><span class="tag p${it.pri}">${priLab}</span></div></div><button class="del" aria-label="刪除">×</button>`;
+  d.innerHTML = `<input type="checkbox" class="chk" ${it.done ? 'checked' : ''} aria-label="已購買">${it.img ? '<img class="thumb" alt="">' : ''}<div class="si-main"><div class="si-name"></div><div class="si-note"></div><div class="tags"><span class="tag t-cat"></span><span class="tag p${it.pri}">${priLab}</span></div></div><div class="item-more-wrap"><button type="button" class="item-more" aria-label="更多">⋮</button></div>`;
   d.querySelector('.si-name').textContent = it.n;
   const nt = d.querySelector('.si-note'); if (it.note) nt.textContent = it.note; else nt.remove();
   d.querySelector('.t-cat').textContent = it.cat;
   if (it.img) d.querySelector('.thumb').src = it.img;
   d.querySelector('.chk').onchange = e => { it.done = e.target.checked ? 1 : 0; saveShop(); renderShop(); };
-  d.querySelector('.del').onclick = () => { shop = shop.filter(x => x.id !== it.id); saveShop(); renderShop(); };
+  d.querySelector('.item-more').onclick = e => {
+    e.stopPropagation();
+    const wrap = d.querySelector('.item-more-wrap');
+    const open = wrap.querySelector('.item-menu');
+    document.querySelectorAll('.item-menu').forEach(m => m.remove());
+    if (open) return;
+    const m = document.createElement('div'); m.className = 'item-menu';
+    m.innerHTML = '<button type="button" data-a="edit">編輯</button><button type="button" data-a="del" class="danger">刪除</button>';
+    m.onclick = ev => {
+      ev.stopPropagation();
+      const a = ev.target.dataset.a; m.remove();
+      if (a === 'edit') openShopEdit(it);
+      if (a === 'del') confirmAsk('刪除呢件購物項目？', () => { shop = shop.filter(x => x.id !== it.id); saveShop(); renderShop(); });
+    };
+    wrap.appendChild(m);
+  };
   return d;
 }
 function renderShop() {
@@ -2077,7 +2237,47 @@ const PRESET_TODOS = [
   { t:'轉接頭', g:'pre' }, { t:'雨具', g:'pre' }, { t:'旅行保險', g:'insurance' }
 ];
 let todos = (trip.todos || []).map(o => Object.assign({ g: o.g || 'pre' }, o));
+let todoEdit = null;
 function saveTodos() { trip.todos = todos; saveTrip(trip); renderTodos(); }
+function openTodoEdit(o) {
+  document.querySelectorAll('.item-menu').forEach(m => m.remove());
+  todoEdit = o;
+  if (!$('todoModal')) return;
+  $('todoTitle').textContent = '編輯準備事項';
+  $('todoEditText').value = o.t || '';
+  $('todoEditGroup').value = o.g || 'pre';
+  $('todoModal').hidden = false;
+  setTimeout(() => $('todoEditText').focus(), 50);
+}
+function todoRow(o, checked) {
+  const i = todos.indexOf(o);
+  const r = document.createElement('div');
+  r.className = 'todo' + (checked ? ' done' : '');
+  r.innerHTML = `<input type="checkbox" id="td${i}" ${checked ? 'checked' : ''}><label for="td${i}"></label><div class="item-more-wrap"><button type="button" class="item-more" aria-label="更多">⋮</button></div>`;
+  r.querySelector('label').textContent = o.t;
+  r.querySelector('input').onchange = e => { o.d = e.target.checked ? 1 : 0; saveTodos(); };
+  r.querySelector('.item-more').onclick = e => {
+    e.stopPropagation();
+    const wrap = r.querySelector('.item-more-wrap');
+    const open = wrap.querySelector('.item-menu');
+    document.querySelectorAll('.item-menu').forEach(m => m.remove());
+    if (open) return;
+    const m = document.createElement('div'); m.className = 'item-menu';
+    m.innerHTML = '<button type="button" data-a="edit">編輯</button><button type="button" data-a="del" class="danger">刪除</button>';
+    m.onclick = ev => {
+      ev.stopPropagation();
+      const a = ev.target.dataset.a; m.remove();
+      if (a === 'edit') openTodoEdit(o);
+      if (a === 'del') confirmAsk('刪除呢項準備事項？', () => {
+        const ix = todos.indexOf(o);
+        if (ix >= 0) todos.splice(ix, 1);
+        saveTodos();
+      });
+    };
+    wrap.appendChild(m);
+  };
+  return r;
+}
 function renderTodos() {
   const box = $('todoList'); box.innerHTML = '';
   const groups = ['pre','visa','insurance'];
@@ -2085,30 +2285,12 @@ function renderTodos() {
     const items = todos.filter(o => !o.d && (o.g || 'pre') === g);
     if (!items.length && g !== 'pre') return;
     const h = document.createElement('div'); h.className = 'todo-group'; h.textContent = TODO_GROUPS[g]; box.appendChild(h);
-    items.forEach(o => {
-      const i = todos.indexOf(o);
-      const r = document.createElement('div');
-      r.className = 'todo';
-      r.innerHTML = `<input type="checkbox" id="td${i}"><label for="td${i}"></label><button class="del" aria-label="刪除">×</button>`;
-      r.querySelector('label').textContent = o.t;
-      r.querySelector('input').onchange = e => { o.d = e.target.checked ? 1 : 0; saveTodos(); };
-      r.querySelector('.del').onclick = () => { todos.splice(i, 1); saveTodos(); };
-      box.appendChild(r);
-    });
+    items.forEach(o => box.appendChild(todoRow(o, false)));
   });
   const doneItems = todos.filter(o => o.d);
   if (doneItems.length) {
     const h = document.createElement('div'); h.className = 'todo-group'; h.textContent = '已完成'; box.appendChild(h);
-    doneItems.forEach(o => {
-      const i = todos.indexOf(o);
-      const r = document.createElement('div');
-      r.className = 'todo done';
-      r.innerHTML = `<input type="checkbox" id="td${i}" checked><label for="td${i}"></label><button class="del" aria-label="刪除">×</button>`;
-      r.querySelector('label').textContent = o.t;
-      r.querySelector('input').onchange = e => { o.d = e.target.checked ? 1 : 0; saveTodos(); };
-      r.querySelector('.del').onclick = () => { todos.splice(i, 1); saveTodos(); };
-      box.appendChild(r);
-    });
+    doneItems.forEach(o => box.appendChild(todoRow(o, true)));
   }
   const done = todos.filter(o => o.d).length, pct = todos.length ? Math.round(done / todos.length * 100) : 0;
   $('todoPct').textContent = `${done}/${todos.length} · ${pct}%`;
@@ -2123,6 +2305,26 @@ $('todoDefaults').onclick = () => {
   confirmAsk('套用預設清單？（唔會刪除你已有項目）', () => {
     const have = new Set(todos.map(o => o.t));
     PRESET_TODOS.forEach(p => { if (!have.has(p.t)) todos.push({ t: p.t, d: 0, g: p.g }); });
+    saveTodos();
+  });
+};
+if ($('todoEditCancel')) $('todoEditCancel').onclick = () => { $('todoModal').hidden = true; todoEdit = null; };
+if ($('todoEditSave')) $('todoEditSave').onclick = () => {
+  if (!todoEdit) return;
+  const t = $('todoEditText').value.trim();
+  if (!t) { $('todoEditText').focus(); return; }
+  todoEdit.t = t;
+  todoEdit.g = $('todoEditGroup').value || 'pre';
+  $('todoModal').hidden = true; todoEdit = null;
+  saveTodos();
+};
+if ($('todoEditDel')) $('todoEditDel').onclick = () => {
+  if (!todoEdit) return;
+  const target = todoEdit;
+  confirmAsk('刪除呢項準備事項？', () => {
+    const ix = todos.indexOf(target);
+    if (ix >= 0) todos.splice(ix, 1);
+    $('todoModal').hidden = true; todoEdit = null;
     saveTodos();
   });
 };

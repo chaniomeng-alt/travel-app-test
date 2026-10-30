@@ -58,6 +58,16 @@
   <div class="tm-err" id="tmErr"></div>
   <div class="tm-btns"><button class="ghost" id="tmCancel">取消</button><button class="btn" id="tmSave">儲存</button></div>
 </div></div>
+<div class="modal" id="todoModal" hidden><div class="modal-card card sheet">
+  <h3 id="todoTitle">編輯準備事項</h3>
+  <label>項目<input class="fld" id="todoEditText" maxlength="40" placeholder="例如 護照"></label>
+  <label>分類<select class="fld" id="todoEditGroup"><option value="pre">出發前</option><option value="visa">簽證</option><option value="insurance">保險</option></select></label>
+  <div class="tm-btns">
+    <button type="button" class="ghost" id="todoEditCancel">取消</button>
+    <button type="button" class="ghost danger-text" id="todoEditDel">刪除</button>
+    <button type="button" class="btn" id="todoEditSave">儲存</button>
+  </div>
+</div></div>
 <div class="modal" id="confirmModal" hidden><div class="modal-card card"><h3 id="cfTitle">確認</h3><p id="cfMsg"></p><div class="tm-btns"><button class="ghost" id="cfNo">取消</button><button class="btn danger" id="cfYes">確認</button></div></div></div>
 <div class="modal" id="memModal" hidden><div class="modal-card card sheet">
   <h3 id="memTitle">新增成員</h3>
@@ -74,6 +84,7 @@
   </div>
   <label>名稱<input class="fld" id="memName" maxlength="20" placeholder="例如 CHA"></label>
   <label>角色<input class="fld" id="memRole" maxlength="20" placeholder="例如 行程規劃、財政大臣"></label>
+  <label>描述<textarea class="fld" id="memDesc" maxlength="80" rows="2" placeholder="例如 負責影相、找路線" style="resize:vertical;min-height:56px"></textarea></label>
   <div class="tm-err" id="memErr"></div>
   <div class="tm-btns"><button class="ghost" id="memCancel">取消</button><button class="btn" id="memSave">儲存</button></div>
 </div></div>
@@ -131,6 +142,16 @@
   </div>
   <div class="tm-err" id="bkErr"></div>
   <div class="tm-btns"><button class="ghost" id="bkCancel">取消</button><button class="btn" id="bkSave">儲存</button></div>
+</div></div>
+
+<div class="modal" id="fileViewModal" hidden><div class="modal-card card sheet file-view-card">
+  <h3 id="fileViewTitle">睇檔案</h3>
+  <div class="file-view-body" id="fileViewBody"></div>
+  <div class="tm-btns" style="flex-wrap:wrap">
+    <a class="btn" id="fileViewDl" download style="text-decoration:none;text-align:center">下載</a>
+    <button type="button" class="ghost" id="fileViewOpen">用瀏覽器開啟</button>
+    <button type="button" class="ghost" id="fileViewClose">關閉</button>
+  </div>
 </div></div>
 
 <main>
@@ -229,7 +250,11 @@
         <select class="fld" id="spPri"><option value="0">一般</option><option value="1">重要</option><option value="2">必買</option></select>
       </div>
       <div class="photo-pick"><label for="spImg">📷 加相</label><input type="file" id="spImg" accept="image/*" hidden><img id="spPrev" alt="" hidden><span id="spImgNote">可選</span></div>
-      <button class="btn" id="spAdd" style="width:100%;margin-top:14px">加入清單</button>
+      <div class="tm-btns" style="margin-top:14px">
+        <button type="button" class="ghost" id="spCancel" hidden>取消</button>
+        <button type="button" class="ghost danger-text" id="spDel" hidden>刪除</button>
+        <button class="btn" id="spAdd" style="flex:1">加入清單</button>
+      </div>
     </div>
     <div class="sh-head"><b>待購買</b><select class="fld" id="spFilter" style="padding:6px 10px;border-radius:14px;font-size:.88rem"></select></div>
     <div id="spList"></div>
