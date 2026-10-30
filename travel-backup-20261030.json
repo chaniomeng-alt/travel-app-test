@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "seedVersion": 2,
+  "seedVersion": 3,
   "activeTripId": "t1",
   "settings": {
     "theme": 6,
@@ -16,7 +16,7 @@
       "destination": "九州",
       "startDate": "2026-11-22",
       "endDate": "2026-11-28",
-      "cover": "",
+      "cover": "assets/covers/kyushu.png",
       "currency": "JPY",
       "days": [
         {
@@ -782,7 +782,7 @@
       "destination": "曼谷",
       "startDate": "2026-12-24",
       "endDate": "2026-12-27",
-      "cover": "",
+      "cover": "assets/covers/bangkok.png",
       "currency": "THB",
       "days": [
         {

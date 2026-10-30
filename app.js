@@ -280,7 +280,7 @@ const TH_DEFAULT_SHOP = [
 function buildThailandTrip() {
   return createTrip({
     id: 't-thai', title: '曼谷小旅', destination: '曼谷', startDate: '2026-12-24', endDate: '2026-12-27',
-    currency: 'THB', cover: '',
+    currency: 'THB', cover: 'assets/covers/bangkok.png',
     bookings: JSON.parse(JSON.stringify(TH_BOOKINGS)),
     budget: { total: 0, rate: 0.22, expenses: [] },
     shop: TH_DEFAULT_SHOP.map(x => Object.assign({}, x)),
@@ -288,9 +288,27 @@ function buildThailandTrip() {
     members: [], _noAdd: true
   });
 }
-const SEED_VER = 2;
+const COVER_KYUSHU = 'assets/covers/kyushu.png';
+const COVER_BANGKOK = 'assets/covers/bangkok.png';
+const SEED_VER = 3;
+function ensureDefaultCovers() {
+  let changed = false;
+  (APP.trips || []).forEach(t => {
+    if (!t || (t.cover && String(t.cover).trim())) return;
+    const blob = ((t.title || '') + ' ' + (t.destination || '')).trim();
+    if (t.id === 't1' || t.title === '九州小旅' || /九州/.test(blob)) {
+      t.cover = COVER_KYUSHU; changed = true;
+    } else if (t.id === 't-thai' || t.title === '曼谷小旅' || /曼谷|泰國|Bangkok|Thai/i.test(blob)) {
+      t.cover = COVER_BANGKOK; changed = true;
+    }
+  });
+  return changed;
+}
 function ensureSeed() {
-  if ((APP.seedVersion || 1) >= SEED_VER) return false;
+  if ((APP.seedVersion || 1) >= SEED_VER) {
+    if (ensureDefaultCovers()) { persist(); return true; }
+    return false;
+  }
   let changed = false;
   const kz = APP.trips.find(t => t.id === 't1' || t.title === '九州小旅');
   if (kz) {
@@ -305,9 +323,11 @@ function ensureSeed() {
       if (!haveT.has(x.t)) { kz.todos.push(Object.assign({}, x)); changed = true; }
     });
     kz.todos.forEach(o => { if (!o.g) o.g = 'pre'; });
+    if (!kz.cover) { kz.cover = COVER_KYUSHU; changed = true; }
   }
   const hasThai = APP.trips.some(t => t.id === 't-thai' || /泰國|曼谷|Thai|Bangkok/i.test((t.title || '') + (t.destination || '')));
   if (!hasThai) { APP.trips.push(buildThailandTrip()); changed = true; }
+  if (ensureDefaultCovers()) changed = true;
   APP.seedVersion = SEED_VER;
   persist();
   return changed;
@@ -346,7 +366,7 @@ function migrate() {
   const shop = old('kz_shop2');
   const todos = old('kz_todos');
   const t1 = createTrip({
-    id: 't1', title: '九州小旅', destination: '九州', startDate: '2026-11-22', endDate: '2026-11-28', currency: 'JPY',
+    id: 't1', title: '九州小旅', destination: '九州', startDate: '2026-11-22', endDate: '2026-11-28', currency: 'JPY', cover: 'assets/covers/kyushu.png',
     days: toDays(Array.isArray(oldDays) && oldDays.length ? oldDays : KZ_DEFAULT_DAYS, '2026-11-22'),
     bookings: JSON.parse(JSON.stringify(KZ_BOOKINGS)),
     budget: { total: +old('kz_budget') || 0, rate: +old('kz_rate') || 0.052, expenses: Array.isArray(exps) ? exps : [] },
