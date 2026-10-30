@@ -23,3 +23,42 @@
 | 曼谷小旅 | 2026-12-24～27 | NX936／NX935、曼谷柏悦酒店（住至 12/26；12/26 晚未見訂單） |
 
 原本嘅 `kyushu-trip` repo 冇掂過。
+
+## PWA（第 6 站）
+
+已加入 `manifest.webmanifest`、`sw.js`、App icon（`assets/icons/`）。Sortable 改為本機 `assets/vendor/`，方便離線。
+
+### 點樣安裝到主畫面
+
+1. 用 **HTTPS** 開：https://chaniomeng-alt.github.io/travel-app-test/
+2. **iPhone Safari**：分享 → 「加至主畫面」
+3. **Android Chrome**：選單 → 「安裝應用程式」／「加到主畫面」
+4. 安裝後會用獨立圖示同全螢幕（standalone）開啟
+
+### 點樣測試離線
+
+1. 先用網絡開一次 App（等 service worker 安裝同快取殼層）
+2. DevTools → Application → Service Workers，確認 activated
+3. 開飛航模式／Offline，再重新載入
+4. 首頁、行程殼、本地資料應仍可用；天氣同 Google 地圖連結需要網絡（刻意唔快取）
+
+### 更新之後
+
+改完程式會升 `sw.js` 入面嘅 `CACHE_VERSION`。開 App 見到頂部「有更新，撳此重新載入」就撳一下。
+
+### 由 1024 icon 出各尺寸（本機）
+
+需要 Pillow：`pip install pillow`
+
+```bash
+python3 - <<'PY'
+from PIL import Image
+src = Image.open('assets/icons/icon-1024.png')
+for s, name in [(512,'icon-512.png'),(192,'icon-192.png'),(180,'apple-touch-icon.png')]:
+    im = src.copy(); im.thumbnail((s,s))
+    canvas = Image.new('RGBA', (s,s), (247,243,234,255))
+    canvas.paste(im, ((s-im.width)//2,(s-im.height)//2), im if im.mode=='RGBA' else None)
+    canvas.save('assets/icons/'+name)
+print('done')
+PY
+```
