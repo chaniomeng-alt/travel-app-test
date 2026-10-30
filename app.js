@@ -542,6 +542,10 @@ function ensureSeed() {
   if (ensurePartyMembers()) changed = true;
   if (ensureDepartTimes()) changed = true;
   APP.seedVersion = SEED_VER;
+  if (changed) {
+    const now = Date.now();
+    (APP.trips || []).forEach(t => { t.updatedAt = now; });
+  }
   persist();
   return changed;
 }
@@ -584,7 +588,8 @@ function createTrip(opts) {
     days: opts.days || [], bookings: opts.bookings || { flights: [], stays: [] },
     budget: opts.budget || { total: 0, rate: ({ JPY:0.052, THB:0.22, KRW:0.0056, TWD:0.24, USD:7.8, EUR:8.4, GBP:9.9 }[opts.currency || 'JPY'] || 0.052), expenses: [] },
     shop: opts.shop || [], todos: opts.todos || [], members: opts.members || [],
-    settings: opts.settings || defaultTripSettings(kindHint || 'new')
+    settings: opts.settings || defaultTripSettings(kindHint || 'new'),
+    updatedAt: opts.updatedAt || Date.now()
   };
   if (!t.days.length) for (let d = pd(start); d <= pd(end); d.setDate(d.getDate() + 1)) t.days.push({ date: isoDate(d), title: '', items: [] });
   if (APP && !opts._noAdd) { APP.trips.push(t); persist(); }
@@ -619,16 +624,13 @@ var cloudSyncing = false;
 var cloudLastStatus = '未登入';
 function persist(opts) {
   opts = opts || {};
-  try {
-    /* only stamp on real edits — never on boot / remote apply (avoids fake "newer" local wiping cloud) */
-    if (!opts.noStamp && !cloudApplyingRemote && APP && Array.isArray(APP.trips)) {
-      const now = Date.now();
-      const t = APP.trips.find(x => x.id === APP.activeTripId) || APP.trips[0];
-      if (t) t.updatedAt = now;
-    }
-  } catch (e) {}
+  /* NEVER bump trip.updatedAt here. Boot / theme / activeTrip / settings used to stamp
+     stale content with a fresh clock, then auto-upload overwrote real edits on other phones.
+     Only saveTrip (and explicit content mutators) may stamp. */
   const ok = store.set(APP_KEY, APP);
-  try { if (typeof scheduleCloudSync === 'function') scheduleCloudSync(); } catch (e) {}
+  try {
+    if (!opts.noCloud && typeof scheduleCloudSync === 'function') scheduleCloudSync();
+  } catch (e) {}
   return ok;
 }
 function loadApp() {
@@ -1030,9 +1032,11 @@ function confirmAsk(msg, onYes) {
 /* re-normalize after load */
 APP.trips.forEach(t => (t.days || []).forEach(d => d.items = (d.items || []).map(normItem)));
 APP.settings = APP.settings || {};
-if (APP.settings.dark == null) APP.settings.dark = false;
-if (APP.settings.autoMerge == null) APP.settings.autoMerge = false;
-persist();
+let _bootSettingsDirty = false;
+if (APP.settings.dark == null) { APP.settings.dark = false; _bootSettingsDirty = true; }
+if (APP.settings.autoMerge == null) { APP.settings.autoMerge = false; _bootSettingsDirty = true; }
+/* settings-only — no trip.updatedAt bump, no cloud push (avoids stale overwrite) */
+if (_bootSettingsDirty) persist({ noCloud: true });
 
 const trip = getTrip();
 let days = trip.days;
@@ -2513,10 +2517,28 @@ const FIREBASE_CONFIG = {
 
 let fbApp = null, fbAuth = null, fbDb = null;
 
+function cloudDebugLine() {
+  try {
+    const trips = (APP && APP.trips) || [];
+    const maxAt = trips.reduce((m, t) => Math.max(m, tripUpdatedAt(t)), 0);
+    const active = trips.find(t => t.id === (APP && APP.activeTripId)) || trips[0];
+    const at = active ? tripUpdatedAt(active) : 0;
+    const fmt = (n) => n ? new Date(n).toLocaleString('zh-HK', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
+    const shopN = active && Array.isArray(active.shop) ? active.shop.length : '?';
+    const todoN = active && Array.isArray(active.todos) ? active.todos.length : '?';
+    const bud = active && active.budget ? (+active.budget.total || 0) : '?';
+    return `本機 ${active ? active.id : '—'} updatedAt ${fmt(at)}（最大 ${fmt(maxAt)}）· 購物${shopN}/準備${todoN}/預算${bud}`;
+  } catch (e) { return ''; }
+}
+
 function cloudSetStatus(msg) {
   cloudLastStatus = msg || '';
   const el = $('cloudSyncLine');
-  if (el) el.textContent = '同步狀態：' + cloudLastStatus;
+  if (el) {
+    const dbg = cloudDebugLine();
+    el.textContent = '同步狀態：' + cloudLastStatus + (dbg ? '\n' + dbg : '');
+    el.style.whiteSpace = 'pre-wrap';
+  }
   const sub = $('cloudSub');
   if (sub && cloudUser) sub.textContent = '已登入 · 改行程會自動同步（約 1.5 秒後）';
   else if (sub && !cloudUser) sub.textContent = '登入後同步旅程到 Firebase（本機資料唔會自動清）';
@@ -2717,6 +2739,43 @@ async function syncWithCloud() {
   }
 }
 
+async function forcePullFromCloud() {
+  if (!fbDb || !cloudUser) return;
+  cloudSetStatus('強制下載中…');
+  const uid = cloudUser.uid;
+  const cloudMap = await fetchMyCloudTrips(uid);
+  cloudApplyingRemote = true;
+  try {
+    const next = [];
+    cloudMap.forEach((cdata, id) => {
+      const remoteTrip = cdata && cdata.trip;
+      if (!remoteTrip || !remoteTrip.id) return;
+      next.push(adoptRemoteTrip(remoteTrip, cloudDocUpdatedAt(cdata), cdata));
+    });
+    if (!next.length) {
+      cloudSetStatus('雲端未有旅程可下載');
+      toast('雲端未有旅程');
+      return;
+    }
+    APP.trips = next;
+    try {
+      const uref = await fbDb.collection('users').doc(uid).get();
+      if (uref.exists) {
+        const u = uref.data() || {};
+        if (u.activeTripId && APP.trips.some(t => t.id === u.activeTripId)) APP.activeTripId = u.activeTripId;
+        if (u.settings && typeof u.settings === 'object') APP.settings = Object.assign({}, APP.settings || {}, u.settings);
+      }
+    } catch (e) {}
+    if (!APP.trips.some(t => t.id === APP.activeTripId)) APP.activeTripId = APP.trips[0].id;
+    store.set(APP_KEY, APP);
+    cloudSetStatus('已強制下載 ' + new Date().toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    toast('已用雲端覆蓋本機');
+    try { location.reload(); } catch (e) {}
+  } finally {
+    cloudApplyingRemote = false;
+  }
+}
+
 async function cloudDeleteTrip(id) {
   if (!fbDb || !cloudUser || !id) return;
   try {
@@ -2726,10 +2785,10 @@ async function cloudDeleteTrip(id) {
   }
 }
 
-async function pushLocalToCloud(fromMerge, prefetchedCloudMap) {
+async function pushLocalToCloud(fromMerge, prefetchedCloudMap, forceUpload) {
   if (!fbDb || !cloudUser || cloudSyncing) return;
   cloudSyncing = true;
-  if (!fromMerge) cloudSetStatus('上載中…');
+  if (!fromMerge) cloudSetStatus(forceUpload ? '強制上載中…' : '上載中…');
   try {
     const uid = cloudUser.uid;
     const now = Date.now();
@@ -2757,14 +2816,20 @@ async function pushLocalToCloud(fromMerge, prefetchedCloudMap) {
 
       const existing = cloudMap.get(t.id);
       const cloudAt = cloudDocUpdatedAt(existing);
-      const localAt = tripUpdatedAt(t);
-      if (existing && cloudAt > localAt) {
-        /* cloud strictly newer — do not overwrite */
-        continue;
-      }
-      if (existing && cloudAt === localAt) {
-        /* same stamp → already consistent; skip (no richness tie-break) */
-        continue;
+      let localAt = tripUpdatedAt(t);
+      if (forceUpload) {
+        /* recover from poisoned stamps on other devices: bump then overwrite cloud */
+        localAt = now;
+        t.updatedAt = now;
+      } else {
+        if (existing && cloudAt > localAt) {
+          /* cloud strictly newer — do not overwrite */
+          continue;
+        }
+        if (existing && cloudAt === localAt) {
+          /* same stamp → already consistent; skip (no richness tie-break) */
+          continue;
+        }
       }
 
       const payload = {
@@ -2859,6 +2924,24 @@ function wireCloudUI() {
         console.warn('[cloud] sync now', e);
         cloudSetStatus('同步失敗：' + ((e && e.message) || '請稍後再試'));
       });
+  };
+  if ($('btnCloudForcePush')) $('btnCloudForcePush').onclick = () => {
+    if (!cloudUser) { toast('請先登入'); return; }
+    confirmAsk('用呢部手機嘅旅程強制蓋過雲端？另一部之後請「強制下載雲端」。', () => {
+      cloudSetStatus('強制上載中…');
+      pushLocalToCloud(false, null, true)
+        .then(() => toast('已強制上載本機'))
+        .catch(e => console.warn('[cloud] force push', e));
+    });
+  };
+  if ($('btnCloudForcePull')) $('btnCloudForcePull').onclick = () => {
+    if (!cloudUser) { toast('請先登入'); return; }
+    confirmAsk('用雲端覆蓋呢部手機嘅旅程？本機較新嘅改動會冇。', () => {
+      forcePullFromCloud().catch(e => {
+        console.warn('[cloud] force pull', e);
+        cloudSetStatus('強制下載失敗：' + ((e && e.message) || '請稍後再試'));
+      });
+    });
   };
   renderCloudAccountUI();
 }
