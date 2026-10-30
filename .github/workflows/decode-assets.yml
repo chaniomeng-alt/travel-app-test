@@ -34,13 +34,13 @@ jobs:
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          mkdir -p assets/covers assets/stickers
-          git add assets/covers assets/stickers
+          mkdir -p assets/covers assets/stickers assets/shop
+          git add assets/covers assets/stickers assets/shop
           if git diff --staged --quiet; then
             echo "No PNG changes"
             exit 0
           fi
-          git commit -m "Add decoded cover and sticker PNGs"
+          git commit -m "Add decoded cover, sticker, and shop PNGs"
           for i in 1 2 3 4 5; do
             if git push; then
               exit 0

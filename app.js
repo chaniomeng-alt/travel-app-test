@@ -910,6 +910,8 @@ document.querySelectorAll('#nav button').forEach(b => b.onclick = () => {
 });
 $('stk-top').innerHTML = `<div style="position:absolute;left:0;top:6px;width:64px;height:64px">${cat('sakura')}</div><div style="position:absolute;right:0;top:0;width:70px;height:70px">${cat('maneki')}</div>`;
 const stkList = $('stk-list'); if (stkList) stkList.innerHTML = cat('bags');
+const pgirl = $('pgirl'); if (pgirl) pgirl.innerHTML = '<img src="assets/shop/shop-girl.png" alt="">';
+const pboy = $('pboy'); if (pboy) pboy.innerHTML = '<img src="assets/shop/shop-boy.png" alt="">';
 $('stk-bud').innerHTML = cat('shop');
 
 /* ---------- bookings CRUD (4b) ---------- */
