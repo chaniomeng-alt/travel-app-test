@@ -1,5 +1,5 @@
 /* Station 6 — service worker（GitHub Pages 子路徑，全部用相對路徑） */
-const CACHE_VERSION = 'v6-1';
+const CACHE_VERSION = 'v6-2';
 const CACHE_NAME = 'travel-app-' + CACHE_VERSION;
 const SHELL_URLS = [
   './index.html',
@@ -7,14 +7,14 @@ const SHELL_URLS = [
   './app.js',
   './manifest.webmanifest',
   './travel-backup-20261030.json',
+  './sw.js',
   './assets/covers/bangkok.png',
   './assets/covers/kyushu.png',
   './assets/decor/deco-cat-budget.png',
   './assets/decor/deco-cat-prep.png',
   './assets/decor/deco-cat-shop.png',
-  './assets/icons/apple-touch-icon.png',
-  './assets/icons/icon-192.png',
-  './assets/icons/icon-512.png',
+  './assets/icons/icon-192.svg',
+  './assets/icons/icon-512.svg',
   './assets/shop/shop-boy.png',
   './assets/shop/shop-girl.png',
   './assets/stickers/pets/sticker-dog-chaimaru.png',

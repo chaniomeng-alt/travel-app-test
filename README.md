@@ -26,7 +26,7 @@
 
 ## PWA（第 6 站）
 
-已加入 `manifest.webmanifest`、`sw.js`、App icon（`assets/icons/`）。Sortable 改為本機 `assets/vendor/`，方便離線。
+已加入 `manifest.webmanifest`、`sw.js`、App icon（`assets/icons/*.svg`；iOS apple-touch 用現有白啡狗 sticker）。Sortable 改為本機 `assets/vendor/`，方便離線。
 
 ### 點樣安裝到主畫面
 
