@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "seedVersion": 5,
+  "seedVersion": 9,
   "activeTripId": "t1",
   "settings": {
     "theme": 6,
@@ -612,7 +612,9 @@
             "arr": "17:00",
             "flightNo": "UO638",
             "date": "2026-11-22",
-            "note": "香港國際機場 客運大樓 2 → 福岡國際機場 國際線航廈"
+            "note": "香港國際機場 客運大樓 2 → 福岡國際機場 國際線航廈",
+            "people": 1,
+            "guest": "CHA"
           },
           {
             "id": "f2",
@@ -623,7 +625,9 @@
             "arr": "15:50",
             "flightNo": "UO601",
             "date": "2026-11-28",
-            "note": "福岡國際機場 → 香港國際機場"
+            "note": "福岡國際機場 → 香港國際機場",
+            "people": 1,
+            "guest": "CHA"
           }
         ],
         "stays": [
@@ -634,7 +638,9 @@
             "checkIn": "2026-11-22",
             "checkOut": "2026-11-24",
             "meta": "方便黑川日歸早班巴士",
-            "q": "ドーミーイン熊本"
+            "q": "ドーミーイン熊本",
+            "people": 1,
+            "guest": "CHA"
           },
           {
             "id": "s2",
@@ -643,7 +649,9 @@
             "checkIn": "2026-11-24",
             "checkOut": "2026-11-26",
             "meta": "2 晚 · 標準雙人房 · 含早餐 · 長崎站前，方便軍艦島碼頭",
-            "q": "ドーミーイン PREMIUM 長崎駅前"
+            "q": "ドーミーイン PREMIUM 長崎駅前",
+            "people": 1,
+            "guest": "CHA"
           },
           {
             "id": "s3",
@@ -653,7 +661,9 @@
             "checkOut": "2026-11-28",
             "meta": "博多駅前 1-17-6 · 單人房禁煙 · 天然温泉博多駅前の湯 · 方便市內散策同機場",
             "q": "西鉄ホテル クルーム博多",
-            "sticker": "bowl"
+            "sticker": "bowl",
+            "people": 1,
+            "guest": "CHA"
           }
         ]
       },
@@ -774,7 +784,13 @@
           "g": "insurance"
         }
       ],
-      "members": [],
+      "members": [
+        {
+          "id": "m-cha",
+          "name": "CHA",
+          "role": "旅客"
+        }
+      ],
       "settings": {
         "theme": 6,
         "fs": 16,
@@ -829,7 +845,8 @@
             "date": "2026-12-24",
             "people": 2,
             "amount": 0,
-            "note": "澳門航空 · 澳門國際機場 → 素萬那普機場 · 經濟艙 A320 · 2 位"
+            "note": "澳門航空 · 澳門國際機場 → 素萬那普機場 · 經濟艙 A320 · 2 位",
+            "guest": "CHA"
           },
           {
             "id": "tf2",
@@ -842,7 +859,8 @@
             "date": "2026-12-27",
             "people": 2,
             "amount": 0,
-            "note": "澳門航空 · 素萬那普機場 → 澳門國際機場 · 經濟艙 A320 · 2 位"
+            "note": "澳門航空 · 素萬那普機場 → 澳門國際機場 · 經濟艙 A320 · 2 位",
+            "guest": "CHA"
           }
         ],
         "stays": [
@@ -855,7 +873,8 @@
             "meta": "Central Embassy, 88 Witthayu Rd, Lumphini · 豪華房 · 特大雙人床 · 含早餐（25、26日）· 2 成人",
             "q": "Park Hyatt Bangkok",
             "people": 2,
-            "amount": 0
+            "amount": 0,
+            "guest": "CHA"
           }
         ]
       },
@@ -953,7 +972,13 @@
           "g": "insurance"
         }
       ],
-      "members": [],
+      "members": [
+        {
+          "id": "m-cha",
+          "name": "CHA",
+          "role": "旅客"
+        }
+      ],
       "settings": {
         "theme": 2,
         "fs": 16,

@@ -251,13 +251,13 @@ function tripStatus(t, now) {
 }
 const KZ_BOOKINGS = {
   flights: [
-    { id:'f1', route:'香港 → 福岡', from:'HKG', to:'FUK', dep:'12:55', arr:'17:00', flightNo:'UO638', date:'2026-11-22', note:'香港國際機場 客運大樓 2 → 福岡國際機場 國際線航廈' },
-    { id:'f2', route:'福岡 → 香港', from:'FUK', to:'HKG', dep:'12:50', arr:'15:50', flightNo:'UO601', date:'2026-11-28', note:'福岡國際機場 → 香港國際機場' }
+    { id:'f1', route:'香港 → 福岡', from:'HKG', to:'FUK', dep:'12:55', arr:'17:00', flightNo:'UO638', date:'2026-11-22', people:1, guest:'CHA', note:'香港國際機場 客運大樓 2 → 福岡國際機場 國際線航廈' },
+    { id:'f2', route:'福岡 → 香港', from:'FUK', to:'HKG', dep:'12:50', arr:'15:50', flightNo:'UO601', date:'2026-11-28', people:1, guest:'CHA', note:'福岡國際機場 → 香港國際機場' }
   ],
   stays: [
-    { id:'s1', name:'天然温泉 六花の湯 ドーミーイン熊本', dates:'11/22（入住 20:00 後）– 11/24（退房 11:00）', checkIn:'2026-11-22', checkOut:'2026-11-24', meta:'方便黑川日歸早班巴士', q:'ドーミーイン熊本' },
-    { id:'s2', name:'天然温泉 鶴港の湯 ドーミーイン PREMIUM 長崎駅前', dates:'11/24（入住 15:00 後）– 11/26（退房 11:00 前）', checkIn:'2026-11-24', checkOut:'2026-11-26', meta:'2 晚 · 標準雙人房 · 含早餐 · 長崎站前，方便軍艦島碼頭', q:'ドーミーイン PREMIUM 長崎駅前' },
-    { id:'s3', name:'西鉄ホテル クルーム博多', dates:'11/26（15:00 入住）– 11/28（11:00 前退房）', checkIn:'2026-11-26', checkOut:'2026-11-28', meta:'博多駅前 1-17-6 · 單人房禁煙 · 天然温泉博多駅前の湯 · 方便市內散策同機場', q:'西鉄ホテル クルーム博多', sticker:'bowl' }
+    { id:'s1', name:'天然温泉 六花の湯 ドーミーイン熊本', dates:'11/22（入住 20:00 後）– 11/24（退房 11:00）', checkIn:'2026-11-22', checkOut:'2026-11-24', meta:'方便黑川日歸早班巴士', q:'ドーミーイン熊本', people:1, guest:'CHA' },
+    { id:'s2', name:'天然温泉 鶴港の湯 ドーミーイン PREMIUM 長崎駅前', dates:'11/24（入住 15:00 後）– 11/26（退房 11:00 前）', checkIn:'2026-11-24', checkOut:'2026-11-26', meta:'2 晚 · 標準雙人房 · 含早餐 · 長崎站前，方便軍艦島碼頭', q:'ドーミーイン PREMIUM 長崎駅前', people:1, guest:'CHA' },
+    { id:'s3', name:'西鉄ホテル クルーム博多', dates:'11/26（15:00 入住）– 11/28（11:00 前退房）', checkIn:'2026-11-26', checkOut:'2026-11-28', meta:'博多駅前 1-17-6 · 單人房禁煙 · 天然温泉博多駅前の湯 · 方便市內散策同機場', q:'西鉄ホテル クルーム博多', sticker:'bowl', people:1, guest:'CHA' }
   ]
 };
 const KZ_DEFAULT_TODOS = [
@@ -283,11 +283,11 @@ const KZ_DEFAULT_SHOP = [
 /* Thailand from Outlook (no 預約編號 in seed) */
 const TH_BOOKINGS = {
   flights: [
-    { id:'tf1', route:'澳門 → 曼谷', from:'MFM', to:'BKK', dep:'10:20', arr:'12:30', flightNo:'NX936', date:'2026-12-24', people:2, amount:0, note:'澳門航空 · 澳門國際機場 → 素萬那普機場 · 經濟艙 A320 · 2 位' },
-    { id:'tf2', route:'曼谷 → 澳門', from:'BKK', to:'MFM', dep:'13:30', arr:'17:35', flightNo:'NX935', date:'2026-12-27', people:2, amount:0, note:'澳門航空 · 素萬那普機場 → 澳門國際機場 · 經濟艙 A320 · 2 位' }
+    { id:'tf1', route:'澳門 → 曼谷', from:'MFM', to:'BKK', dep:'10:20', arr:'12:30', flightNo:'NX936', date:'2026-12-24', people:2, guest:'CHA', amount:0, note:'澳門航空 · 澳門國際機場 → 素萬那普機場 · 經濟艙 A320 · 2 位' },
+    { id:'tf2', route:'曼谷 → 澳門', from:'BKK', to:'MFM', dep:'13:30', arr:'17:35', flightNo:'NX935', date:'2026-12-27', people:2, guest:'CHA', amount:0, note:'澳門航空 · 素萬那普機場 → 澳門國際機場 · 經濟艙 A320 · 2 位' }
   ],
   stays: [
-    { id:'ts1', name:'曼谷柏悦酒店', dates:'12/24（15:00 後）– 12/26（12:00 前）', checkIn:'2026-12-24', checkOut:'2026-12-26', meta:'Central Embassy, 88 Witthayu Rd, Lumphini · 豪華房 · 特大雙人床 · 含早餐（25、26日）· 2 成人', q:'Park Hyatt Bangkok', people:2, amount:0 }
+    { id:'ts1', name:'曼谷柏悦酒店', dates:'12/24（15:00 後）– 12/26（12:00 前）', checkIn:'2026-12-24', checkOut:'2026-12-26', meta:'Central Embassy, 88 Witthayu Rd, Lumphini · 豪華房 · 特大雙人床 · 含早餐（25、26日）· 2 成人', q:'Park Hyatt Bangkok', people:2, guest:'CHA', amount:0 }
   ]
 };
 const TH_DEFAULT_TODOS = [
@@ -315,12 +315,13 @@ function buildThailandTrip() {
     budget: { total: 0, rate: 0.22, expenses: [] },
     shop: TH_DEFAULT_SHOP.map(x => Object.assign({}, x)),
     todos: TH_DEFAULT_TODOS.map(x => Object.assign({}, x)),
-    members: [], settings: defaultTripSettings('bangkok'), _kind: 'bangkok', _noAdd: true
+    members: DEFAULT_MEMBERS_CHA.map(x => Object.assign({}, x)), settings: defaultTripSettings('bangkok'), _kind: 'bangkok', _noAdd: true
   });
 }
 const COVER_KYUSHU = 'assets/covers/kyushu.png?v=5';
 const COVER_BANGKOK = 'assets/covers/bangkok.png?v=8';
-const SEED_VER = 8;
+const DEFAULT_MEMBERS_CHA = [{ id: 'm-cha', name: 'CHA', role: '旅客' }];
+const SEED_VER = 9;
 
 function renameTripTitles() {
   let changed = false;
@@ -389,11 +390,68 @@ function migrateTripSettings() {
   });
   return changed;
 }
+
+function tripPartyLabel(t) {
+  if (!t) return '';
+  const names = (t.members || []).map(m => (m && m.name) || '').filter(Boolean);
+  let pax = 0;
+  const b = t.bookings;
+  if (b && !Array.isArray(b)) {
+    [...(b.flights || []), ...(b.stays || [])].forEach(x => { pax = Math.max(pax, +x.people || 0); });
+  } else if (Array.isArray(b)) {
+    b.forEach(x => { pax = Math.max(pax, +x.people || +(x.split) || 0); });
+  }
+  if (!pax) pax = names.length;
+  if (!names.length && !pax) return '';
+  if (names.length && pax > names.length) return '👥 ' + names.join('、') + ' · ' + pax + ' 人';
+  if (names.length) return '👥 ' + names.join('、') + (pax > 1 ? ' · ' + pax + ' 人' : '');
+  return '👥 ' + pax + ' 人';
+}
+function bkPeopleNote(x, style) {
+  if (!x) return '';
+  const p = +x.people || 0;
+  const g = String(x.guest || '').trim();
+  if (!p && !g && !x.amount) return '';
+  const bits = [];
+  if (g || p) bits.push('人員' + (g ? ' ' + g : '') + (p ? (g ? ' · ' : ' ') + p + ' 人' : ''));
+  if (x.amount) bits.push('金額 ' + x.amount + (p ? ' · 分攤 ' + p + ' 人' : ''));
+  if (!bits.length) return '';
+  return '<div class="pass-note"' + (style || '') + '>' + escH(bits.join(' · ')) + '</div>';
+}
+function ensurePartyMembers() {
+  let changed = false;
+  (APP.trips || []).forEach(t => {
+    if (!t) return;
+    if (!Array.isArray(t.members)) { t.members = []; changed = true; }
+    if (!t.members.length) {
+      if (isKyushuTrip(t) || isBangkokTrip(t)) {
+        t.members = DEFAULT_MEMBERS_CHA.map(x => Object.assign({}, x));
+        changed = true;
+      }
+    }
+    const b = t.bookings;
+    if (!b || Array.isArray(b)) return;
+    const guest = (t.members[0] && t.members[0].name) || 'CHA';
+    const pax = isBangkokTrip(t) ? 2 : (isKyushuTrip(t) ? 1 : 0);
+    if (!pax) return;
+    (b.flights || []).forEach(f => {
+      if (f.people == null || +f.people === 0) { f.people = pax; changed = true; }
+      if (!f.guest) { f.guest = guest; changed = true; }
+    });
+    (b.stays || []).forEach(st => {
+      if (st.people == null || +st.people === 0) { st.people = pax; changed = true; }
+      if (!st.guest) { st.guest = guest; changed = true; }
+    });
+  });
+  return changed;
+}
+
 function ensureSeed() {
   /* Always migrate per-trip settings if missing */
   let always = migrateTripSettings();
   if (ensureDefaultCovers()) always = true;
   if (renameTripTitles()) always = true;
+  if (ensurePartyMembers()) always = true;
   if ((APP.seedVersion || 1) >= SEED_VER) {
     if (always) persist();
     return always;
@@ -418,6 +476,7 @@ function ensureSeed() {
   if (!hasThai) { APP.trips.push(buildThailandTrip()); changed = true; }
   if (ensureDefaultCovers()) changed = true;
   if (renameTripTitles()) changed = true;
+  if (ensurePartyMembers()) changed = true;
   APP.seedVersion = SEED_VER;
   persist();
   return changed;
@@ -480,7 +539,7 @@ function migrate() {
     budget: { total: +old('kz_budget') || 0, rate: +old('kz_rate') || 0.052, expenses: Array.isArray(exps) ? exps : [] },
     shop: Array.isArray(shop) ? shop : KZ_DEFAULT_SHOP.map(x => Object.assign({}, x)),
     todos: Array.isArray(todos) ? todos : KZ_DEFAULT_TODOS.map(x => Object.assign({}, x)),
-    members: [], settings: { theme: settings.theme, fs: settings.fs, fx: settings.fx, dark: false, hideStickers: false }, _kind: 'kyushu', _noAdd: true
+    members: DEFAULT_MEMBERS_CHA.map(x => Object.assign({}, x)), settings: { theme: settings.theme, fs: settings.fs, fx: settings.fx, dark: false, hideStickers: false }, _kind: 'kyushu', _noAdd: true
   });
   const tThai = buildThailandTrip();
   return { version: 1, seedVersion: SEED_VER, activeTripId: 't1', settings, trips: [t1, tThai] };
@@ -761,7 +820,8 @@ function renderHome() {
     c.innerHTML = `<div class="trip-cover" style="${coverCSS(t.cover)}"></div>
       <div class="trip-body"><div class="trip-name">${escH(t.title)}</div>
       <div class="trip-meta">📍 ${escH(t.destination || '未填目的地')}</div>
-      <div class="trip-meta">${t.startDate.replace(/-/g, '/')} – ${t.endDate.replace(/-/g, '/')}・${n} 日</div>${extra}</div>
+      <div class="trip-meta">${t.startDate.replace(/-/g, '/')} – ${t.endDate.replace(/-/g, '/')}・${n} 日</div>
+      ${tripPartyLabel(t) ? `<div class="trip-meta trip-party">${escH(tripPartyLabel(t))}</div>` : ''}${extra}</div>
       <button class="trip-more" aria-label="更多">⋯</button>`;
     c.onclick = e => { if (!e.target.closest('.trip-more,.trip-menu')) enterTrip(t.id); };
     c.querySelector('.trip-more').onclick = e => {
@@ -1317,7 +1377,7 @@ function renderBookings() {
         </div>
         <div class="pass-foot"><div>航班編號<b>${escH(f.flightNo)}</b></div><div style="text-align:right">日期<b>${fmtBkDate(f.date)}</b></div></div>
         ${f.note ? `<div class="pass-note">${escH(f.note)}</div>` : ''}
-        ${f.amount ? `<div class="pass-note">金額 ${f.amount} · 分攤 ${f.people || 1} 人</div>` : ''}
+        ${bkPeopleNote(f)}
         ${f.fileId ? `<span class="file-badge">已上載 PDF／相片</span>` : ''}
         <div class="bk-actions">
           <button class="ghost sm" data-a="edit">編輯</button>
@@ -1335,7 +1395,7 @@ function renderBookings() {
         <div class="stay-date">${escH(stayDatesLabel(s))}</div>
         <div class="stay-meta">${escH(s.addr || s.meta || s.note || '')}</div>
         <a class="maplink" href="${escH(gmap(s.q || s.name))}" target="_blank" rel="noopener">${ic('pin')}Google 地圖</a>
-        ${s.amount ? `<div class="pass-note" style="margin-top:8px">金額 ${s.amount} · 分攤 ${s.people || 1} 人</div>` : ''}
+        ${bkPeopleNote(s, ' style="margin-top:8px"')}
         ${s.fileId ? `<span class="file-badge">已上載 PDF／相片</span>` : ''}
         <div class="bk-actions">
           <button class="ghost sm" data-a="edit">編輯</button>
@@ -1900,6 +1960,22 @@ if ($('setHint') && isInTripView()) {
   $('setHint').textContent = `「${tt.title}」專用設定 · 切換旅程唔會跟住改`;
   const sub = document.querySelector('#v-set .page-sub');
   if (sub) sub.textContent = '只影響呢個旅程嘅樣';
+  const pl = $('partyList');
+  const ps = $('partySub');
+  if (pl) {
+    const mem = (tt.members || []).filter(m => m && m.name);
+    let pax = 0;
+    const bb = tt.bookings;
+    if (bb && !Array.isArray(bb)) [...(bb.flights || []), ...(bb.stays || [])].forEach(x => { pax = Math.max(pax, +x.people || 0); });
+    if (!pax) pax = mem.length;
+    if (ps) ps.textContent = pax ? (`呢個旅程 · ${pax} 人`) : '呢個旅程嘅旅客';
+    if (!mem.length && !pax) pl.innerHTML = '<p class="hint" style="margin:0">未有人員資料（完整成員分頁喺路線圖第 8 站）</p>';
+    else {
+      const rows = mem.map(m => `<div class="party-row"><span class="party-av">👤</span><div><b>${escH(m.name)}</b><small>${escH(m.role || '旅客')}</small></div></div>`).join('');
+      const extra = (pax > mem.length) ? `<p class="hint" style="margin:8px 0 0">預約顯示共 ${pax} 人（Outlook 未見第二位姓名）</p>` : '';
+      pl.innerHTML = rows + extra;
+    }
+  }
 }
 
 /* CSS for toggle.on */
