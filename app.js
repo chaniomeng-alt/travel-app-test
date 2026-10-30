@@ -439,6 +439,19 @@ const STICKERS = {
   th04: { name: '芒果糯米飯貓', src: 'assets/stickers/sticker-th-04.png' },
   th05: { name: '潑水節貓', src: 'assets/stickers/sticker-th-05.png' },
   th06: { name: '雞蛋花象墜貓', src: 'assets/stickers/sticker-th-06.png' },
+  /* designer dog stickers */
+  dog01: { name: '柴犬', src: 'assets/stickers/sticker-dog-01.png' },
+  dog02: { name: '哥基', src: 'assets/stickers/sticker-dog-02.png' },
+  dog03: { name: '貴婦狗', src: 'assets/stickers/sticker-dog-03.png' },
+  dog04: { name: '臘腸狗', src: 'assets/stickers/sticker-dog-04.png' },
+  dog05: { name: '老虎狗', src: 'assets/stickers/sticker-dog-05.png' },
+  dog06: { name: '㹴犬', src: 'assets/stickers/sticker-dog-06.png' },
+  dog07: { name: '比格犬', src: 'assets/stickers/sticker-dog-07.png' },
+  dog08: { name: '哈士奇', src: 'assets/stickers/sticker-dog-08.png' },
+  dog09: { name: '比熊', src: 'assets/stickers/sticker-dog-09.png' },
+  dog10: { name: '黑狗', src: 'assets/stickers/sticker-dog-10.png' },
+  dog11: { name: '啡狗', src: 'assets/stickers/sticker-dog-11.png' },
+  dog12: { name: '大麥町', src: 'assets/stickers/sticker-dog-12.png' },
   /* legacy canvas keys kept so old placements still render */
   maneki: { name: '招財貓' }, sakura: { name: '櫻花貓' }, ramen: { name: '拉麵貓' }, bowl: { name: '碗貓' },
   shop: { name: '購物貓' }, bags: { name: '手袋貓' }, girl: { name: '女仔' }
