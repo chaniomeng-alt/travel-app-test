@@ -236,6 +236,16 @@
       <div class="set-h"><div class="ci"><svg class="ic" viewBox="0 0 24 24" id="ic-spark"></svg></div><div><b>飄落特效</b><small>選擇背景動畫效果</small></div></div>
       <div class="fx-grid" id="fxGrid"></div>
     </div>
+    <div class="card">
+      <div class="set-h"><div class="ci">💾</div><div><b>備份同還原</b><small>匯出／匯入旅程資料（JSON）</small></div></div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+        <button type="button" class="btn" id="btnExport">匯出備份</button>
+        <button type="button" class="btn ghost" id="btnImport">匯入備份</button>
+        <button type="button" class="btn ghost" id="btnLoadDemo">載入示範資料</button>
+      </div>
+      <input type="file" id="importFile" accept="application/json,.json" hidden>
+      <p class="hint" style="margin-top:8px">示範資料包括九州小旅同曼谷小旅（Outlook 機票酒店，無預約編號）。匯入會覆蓋本機資料。</p>
+    </div>
     <p class="hint" id="setHint">小小貓陪你去旅行 🐾</p>
   </section>
 </main>

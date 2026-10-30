@@ -1,0 +1,949 @@
+{
+  "version": 1,
+  "seedVersion": 2,
+  "activeTripId": "t1",
+  "settings": {
+    "theme": 6,
+    "fs": 16,
+    "fx": "leaf",
+    "dark": false,
+    "autoMerge": false
+  },
+  "trips": [
+    {
+      "id": "t1",
+      "title": "九州小旅",
+      "destination": "九州",
+      "startDate": "2026-11-22",
+      "endDate": "2026-11-28",
+      "cover": "",
+      "currency": "JPY",
+      "days": [
+        {
+          "title": "抵達熊本",
+          "route": "香港 → 福岡 → 熊本",
+          "hotel": "ドーミーイン熊本",
+          "hq": "ドーミーイン熊本",
+          "temp": [
+            18,
+            12
+          ],
+          "place": "熊本",
+          "cat": "maneki",
+          "items": [
+            {
+              "time": "早上",
+              "ic": "bus",
+              "text": "金巴：澳門 → 香港機場",
+              "type": "transport",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5lt76"
+            },
+            {
+              "time": "12:55",
+              "ic": "plane",
+              "text": "UO638 · HKG 客運大樓 2 起飛",
+              "q": "香港國際機場 客運大樓2",
+              "type": "transport",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5cbvw"
+            },
+            {
+              "time": "17:00",
+              "ic": "plane",
+              "text": "抵達福岡機場國際線航廈",
+              "q": "福岡空港 国際線ターミナル",
+              "type": "transport",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5kdq8"
+            },
+            {
+              "time": "傍晚",
+              "ic": "train",
+              "text": "新幹線：博多 → 熊本站",
+              "must": 1,
+              "q": "熊本駅",
+              "type": "transport",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w525tg"
+            },
+            {
+              "time": "晚上",
+              "ic": "bed",
+              "text": "入住ドーミーイン熊本（20:00 後可入住）",
+              "q": "ドーミーイン熊本",
+              "type": "hotel",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5ekuh"
+            }
+          ],
+          "date": "2026-11-22"
+        },
+        {
+          "title": "黑川溫泉日歸",
+          "route": "熊本 → 黑川溫泉 → 熊本",
+          "hotel": "ドーミーイン熊本",
+          "hq": "ドーミーイン熊本",
+          "temp": [
+            15,
+            8
+          ],
+          "place": "黑川",
+          "cat": "sakura",
+          "items": [
+            {
+              "time": "早上",
+              "ic": "bus",
+              "text": "熊本出發 → 黑川溫泉（九州橫斷巴士）",
+              "must": 1,
+              "q": "黒川温泉",
+              "type": "transport",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5zv55"
+            },
+            {
+              "time": "中午",
+              "ic": "pin",
+              "text": "入湯手形多湯巡禮，日歸溫泉",
+              "q": "黒川温泉 入湯手形",
+              "type": "sight",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5vkpz"
+            },
+            {
+              "time": "下午",
+              "ic": "pin",
+              "text": "黑川溪谷散步，看秋色",
+              "q": "黒川温泉街",
+              "type": "sight",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5gy75"
+            },
+            {
+              "time": "傍晚",
+              "ic": "bus",
+              "text": "返回熊本（住ドーミーイン）",
+              "q": "ドーミーイン熊本",
+              "type": "transport",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w59pye"
+            }
+          ],
+          "date": "2026-11-23"
+        },
+        {
+          "title": "前往長崎",
+          "route": "熊本 → 博多 → 長崎",
+          "hotel": "ドーミーイン PREMIUM 長崎駅前",
+          "hq": "ドーミーイン PREMIUM 長崎駅前",
+          "temp": [
+            19,
+            13
+          ],
+          "place": "長崎",
+          "cat": "ramen",
+          "items": [
+            {
+              "time": "早上",
+              "ic": "train",
+              "text": "新幹線：熊本 → 博多 → 長崎（西九州新幹線）",
+              "must": 1,
+              "q": "長崎駅",
+              "type": "transport",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5aeom"
+            },
+            {
+              "time": "中午",
+              "ic": "bed",
+              "text": "入住長崎住宿",
+              "q": "ドーミーイン PREMIUM 長崎駅前",
+              "type": "hotel",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w546g5"
+            },
+            {
+              "time": "下午",
+              "ic": "pin",
+              "text": "長崎原爆資料館",
+              "must": 1,
+              "q": "長崎原爆資料館",
+              "type": "sight",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w585z5"
+            },
+            {
+              "time": "晚上",
+              "ic": "food",
+              "text": "中華街或出島附近晚餐",
+              "q": "長崎新地中華街",
+              "type": "food",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5ui4m"
+            }
+          ],
+          "date": "2026-11-24"
+        },
+        {
+          "title": "軍艦島・原爆",
+          "route": "長崎 → 軍艦島 → 長崎市區",
+          "hotel": "ドーミーイン PREMIUM 長崎駅前",
+          "hq": "ドーミーイン PREMIUM 長崎駅前",
+          "temp": [
+            19,
+            13
+          ],
+          "place": "長崎",
+          "cat": "bowl",
+          "items": [
+            {
+              "time": "早上",
+              "ic": "bus",
+              "text": "前往軍艦島登島碼頭",
+              "must": 1,
+              "q": "軍艦島クルーズ 乗り場 長崎",
+              "type": "transport",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5iqkd"
+            },
+            {
+              "time": "上午",
+              "ic": "pin",
+              "text": "軍艦島巡禮（視天氣）",
+              "must": 1,
+              "q": "軍艦島",
+              "type": "sight",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5jq3a"
+            },
+            {
+              "time": "下午",
+              "ic": "pin",
+              "text": "長崎原爆資料館（如未看完）",
+              "must": 1,
+              "q": "長崎原爆資料館",
+              "type": "sight",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5jftc"
+            },
+            {
+              "time": "晚上",
+              "ic": "food",
+              "text": "長崎市區散步或美食",
+              "type": "food",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5j1bq"
+            }
+          ],
+          "date": "2026-11-25"
+        },
+        {
+          "title": "長崎 → 福岡",
+          "route": "長崎 → 博多",
+          "hotel": "西鉄ホテル クルーム博多",
+          "hq": "西鉄ホテル クルーム博多",
+          "temp": [
+            18,
+            12
+          ],
+          "place": "福岡",
+          "cat": "maneki",
+          "items": [
+            {
+              "time": "早上",
+              "ic": "train",
+              "text": "新幹線：長崎 → 博多",
+              "must": 1,
+              "q": "博多駅",
+              "type": "transport",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5s653"
+            },
+            {
+              "time": "中午",
+              "ic": "bed",
+              "text": "抵達福岡，入住",
+              "q": "西鉄ホテル クルーム博多",
+              "type": "hotel",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5latf"
+            },
+            {
+              "time": "下午",
+              "ic": "pin",
+              "text": "福岡市區自由活動",
+              "type": "sight",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5u1ov"
+            },
+            {
+              "time": "晚上",
+              "ic": "food",
+              "text": "福岡美食",
+              "type": "food",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5zhsk"
+            }
+          ],
+          "date": "2026-11-26"
+        },
+        {
+          "title": "貓島 或 大濠公園",
+          "route": "方案 A 相島 ／ 方案 B 大濠公園",
+          "hotel": "西鉄ホテル クルーム博多",
+          "hq": "西鉄ホテル クルーム博多",
+          "temp": [
+            18,
+            12
+          ],
+          "place": "福岡",
+          "cat": "sakura",
+          "items": [
+            {
+              "time": "方案 A",
+              "ic": "train",
+              "text": "福岡 → 新宮港 → 渡輪去相島（貓島）",
+              "must": 1,
+              "opt": "a",
+              "q": "相島渡船 新宮港",
+              "type": "transport",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5hh6a"
+            },
+            {
+              "time": "方案 A",
+              "ic": "pin",
+              "text": "相島散步、與貓咪互動、看海",
+              "must": 1,
+              "opt": "a",
+              "q": "相島 福岡",
+              "type": "sight",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5bz0k"
+            },
+            {
+              "time": "方案 B",
+              "ic": "pin",
+              "text": "大濠公園散步、看秋景（市內輕鬆）",
+              "must": 1,
+              "opt": "b",
+              "q": "大濠公園",
+              "type": "sight",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w55dw5"
+            },
+            {
+              "time": "方案 B",
+              "ic": "pin",
+              "text": "天神・中洲・博多市內自由散步、購物、美食",
+              "opt": "b",
+              "q": "天神 福岡",
+              "type": "sight",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5m6l5"
+            },
+            {
+              "time": "中午",
+              "ic": "food",
+              "text": "FILTER SUPPLY（フィルターサプライ）飲咖啡及買咖啡豆",
+              "must": 1,
+              "q": "FILTER SUPPLY 福岡",
+              "type": "food",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5o571"
+            },
+            {
+              "time": "晚上",
+              "ic": "food",
+              "text": "福岡市區自由活動／休息",
+              "type": "food",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5wsk1"
+            }
+          ],
+          "date": "2026-11-27"
+        },
+        {
+          "title": "福岡自由・出發",
+          "route": "福岡 → 香港",
+          "hotel": "11:00 前退房（西鉄ホテル クルーム博多）",
+          "hq": "西鉄ホテル クルーム博多",
+          "temp": [
+            18,
+            12
+          ],
+          "place": "福岡",
+          "cat": "ramen",
+          "items": [
+            {
+              "time": "09:45",
+              "ic": "bed",
+              "text": "退房（11:00 前），出發去機場",
+              "q": "西鉄ホテル クルーム博多",
+              "type": "hotel",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w50kmu"
+            },
+            {
+              "time": "10:00",
+              "ic": "train",
+              "text": "地鐵：博多 → 福岡空港（約 5–6 分鐘）",
+              "must": 1,
+              "q": "福岡空港駅",
+              "type": "transport",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5j6qj"
+            },
+            {
+              "time": "10:50",
+              "ic": "plane",
+              "text": "辦理登機、退稅、買最後手信（起飛前 2 小時到）",
+              "must": 1,
+              "q": "福岡空港 国際線ターミナル",
+              "type": "transport",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5pwdt"
+            },
+            {
+              "time": "辦妥登機",
+              "ic": "food",
+              "text": "去竹乃屋食雞皮（福岡機場）",
+              "must": 1,
+              "q": "竹乃屋 福岡空港",
+              "type": "food",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5pb4i"
+            },
+            {
+              "time": "12:50",
+              "ic": "plane",
+              "text": "UO601 · 福岡機場起飛 → HKG 15:50",
+              "q": "福岡空港 国際線ターミナル",
+              "type": "transport",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5gvgb"
+            },
+            {
+              "time": "15:50",
+              "ic": "bus",
+              "text": "抵達香港，轉金巴返澳門",
+              "q": "香港國際機場",
+              "type": "transport",
+              "note": "",
+              "cost": 0,
+              "ticket": 0,
+              "hours": "",
+              "feat": "",
+              "remind": 0,
+              "id": "amvuhw3w5akex"
+            }
+          ],
+          "date": "2026-11-28"
+        }
+      ],
+      "bookings": {
+        "flights": [
+          {
+            "id": "f1",
+            "route": "香港 → 福岡",
+            "from": "HKG",
+            "to": "FUK",
+            "dep": "12:55",
+            "arr": "17:00",
+            "flightNo": "UO638",
+            "date": "2026-11-22",
+            "note": "香港國際機場 客運大樓 2 → 福岡國際機場 國際線航廈"
+          },
+          {
+            "id": "f2",
+            "route": "福岡 → 香港",
+            "from": "FUK",
+            "to": "HKG",
+            "dep": "12:50",
+            "arr": "15:50",
+            "flightNo": "UO601",
+            "date": "2026-11-28",
+            "note": "福岡國際機場 → 香港國際機場"
+          }
+        ],
+        "stays": [
+          {
+            "id": "s1",
+            "name": "天然温泉 六花の湯 ドーミーイン熊本",
+            "dates": "11/22（入住 20:00 後）– 11/24（退房 11:00）",
+            "checkIn": "2026-11-22",
+            "checkOut": "2026-11-24",
+            "meta": "方便黑川日歸早班巴士",
+            "q": "ドーミーイン熊本"
+          },
+          {
+            "id": "s2",
+            "name": "天然温泉 鶴港の湯 ドーミーイン PREMIUM 長崎駅前",
+            "dates": "11/24（入住 15:00 後）– 11/26（退房 11:00 前）",
+            "checkIn": "2026-11-24",
+            "checkOut": "2026-11-26",
+            "meta": "2 晚 · 標準雙人房 · 含早餐 · 長崎站前，方便軍艦島碼頭",
+            "q": "ドーミーイン PREMIUM 長崎駅前"
+          },
+          {
+            "id": "s3",
+            "name": "西鉄ホテル クルーム博多",
+            "dates": "11/26（15:00 入住）– 11/28（11:00 前退房）",
+            "checkIn": "2026-11-26",
+            "checkOut": "2026-11-28",
+            "meta": "博多駅前 1-17-6 · 單人房禁煙 · 天然温泉博多駅前の湯 · 方便市內散策同機場",
+            "q": "西鉄ホテル クルーム博多",
+            "sticker": "bowl"
+          }
+        ]
+      },
+      "budget": {
+        "total": 0,
+        "rate": 0.052,
+        "expenses": []
+      },
+      "shop": [
+        {
+          "id": 1,
+          "n": "努努雞",
+          "note": "福岡機場／市區手信",
+          "cat": "零食",
+          "pri": 1,
+          "done": 0,
+          "img": ""
+        },
+        {
+          "id": 2,
+          "n": "明太子",
+          "note": "博多名物",
+          "cat": "零食",
+          "pri": 1,
+          "done": 0,
+          "img": ""
+        },
+        {
+          "id": 3,
+          "n": "鹽昆布",
+          "note": "",
+          "cat": "零食",
+          "pri": 0,
+          "done": 0,
+          "img": ""
+        },
+        {
+          "id": 4,
+          "n": "FILTER SUPPLY 咖啡豆",
+          "note": "11/27 必去",
+          "cat": "其他",
+          "pri": 1,
+          "done": 0,
+          "img": ""
+        },
+        {
+          "id": 5,
+          "n": "博多通りもん",
+          "note": "手信餅",
+          "cat": "零食",
+          "pri": 0,
+          "done": 0,
+          "img": ""
+        },
+        {
+          "id": 6,
+          "n": "黑川／溫泉手信",
+          "note": "黑川溫泉日歸",
+          "cat": "其他",
+          "pri": 0,
+          "done": 0,
+          "img": ""
+        },
+        {
+          "id": 7,
+          "n": "長崎蛋糕／卡斯特拉",
+          "note": "長崎手信",
+          "cat": "零食",
+          "pri": 0,
+          "done": 0,
+          "img": ""
+        }
+      ],
+      "todos": [
+        {
+          "t": "買北九州 5 日券（官網最平）",
+          "d": 0,
+          "g": "pre"
+        },
+        {
+          "t": "確認 11/22 傍晚新幹線班次",
+          "d": 0,
+          "g": "pre"
+        },
+        {
+          "t": "黑川溫泉巴士預約",
+          "d": 0,
+          "g": "pre"
+        },
+        {
+          "t": "軍艦島登島票",
+          "d": 0,
+          "g": "pre"
+        },
+        {
+          "t": "貓島渡輪 或 大濠公園計劃",
+          "d": 0,
+          "g": "pre"
+        },
+        {
+          "t": "換日圓 / 交通卡",
+          "d": 0,
+          "g": "pre"
+        },
+        {
+          "t": "護照同證件",
+          "d": 0,
+          "g": "pre"
+        },
+        {
+          "t": "手機網卡／eSIM",
+          "d": 0,
+          "g": "pre"
+        },
+        {
+          "t": "旅行保險",
+          "d": 0,
+          "g": "insurance"
+        }
+      ],
+      "members": []
+    },
+    {
+      "id": "t-thai",
+      "title": "曼谷小旅",
+      "destination": "曼谷",
+      "startDate": "2026-12-24",
+      "endDate": "2026-12-27",
+      "cover": "",
+      "currency": "THB",
+      "days": [
+        {
+          "date": "2026-12-24",
+          "title": "",
+          "items": []
+        },
+        {
+          "date": "2026-12-25",
+          "title": "",
+          "items": []
+        },
+        {
+          "date": "2026-12-26",
+          "title": "",
+          "items": []
+        },
+        {
+          "date": "2026-12-27",
+          "title": "",
+          "items": []
+        }
+      ],
+      "bookings": {
+        "flights": [
+          {
+            "id": "tf1",
+            "route": "澳門 → 曼谷",
+            "from": "MFM",
+            "to": "BKK",
+            "dep": "10:20",
+            "arr": "12:30",
+            "flightNo": "NX936",
+            "date": "2026-12-24",
+            "people": 2,
+            "amount": 0,
+            "note": "澳門航空 · 澳門國際機場 → 素萬那普機場 · 經濟艙 A320 · 2 位"
+          },
+          {
+            "id": "tf2",
+            "route": "曼谷 → 澳門",
+            "from": "BKK",
+            "to": "MFM",
+            "dep": "13:30",
+            "arr": "17:35",
+            "flightNo": "NX935",
+            "date": "2026-12-27",
+            "people": 2,
+            "amount": 0,
+            "note": "澳門航空 · 素萬那普機場 → 澳門國際機場 · 經濟艙 A320 · 2 位"
+          }
+        ],
+        "stays": [
+          {
+            "id": "ts1",
+            "name": "曼谷柏悦酒店",
+            "dates": "12/24（15:00 後）– 12/26（12:00 前）",
+            "checkIn": "2026-12-24",
+            "checkOut": "2026-12-26",
+            "meta": "Central Embassy, 88 Witthayu Rd, Lumphini · 豪華房 · 特大雙人床 · 含早餐（25、26日）· 2 成人",
+            "q": "Park Hyatt Bangkok",
+            "people": 2,
+            "amount": 0
+          }
+        ]
+      },
+      "budget": {
+        "total": 0,
+        "rate": 0.22,
+        "expenses": []
+      },
+      "shop": [
+        {
+          "id": 101,
+          "n": "芒果乾",
+          "note": "機場／超市",
+          "cat": "零食",
+          "pri": 1,
+          "done": 0,
+          "img": ""
+        },
+        {
+          "id": 102,
+          "n": "泰式香料／咖喱醬",
+          "note": "",
+          "cat": "其他",
+          "pri": 0,
+          "done": 0,
+          "img": ""
+        },
+        {
+          "id": 103,
+          "n": "椰子油／護膚",
+          "note": "",
+          "cat": "其他",
+          "pri": 0,
+          "done": 0,
+          "img": ""
+        },
+        {
+          "id": 104,
+          "n": "Chatuchak／夜市小物",
+          "note": "",
+          "cat": "其他",
+          "pri": 0,
+          "done": 0,
+          "img": ""
+        },
+        {
+          "id": 105,
+          "n": "泰式奶茶／手標茶",
+          "note": "",
+          "cat": "零食",
+          "pri": 0,
+          "done": 0,
+          "img": ""
+        }
+      ],
+      "todos": [
+        {
+          "t": "護照同證件（2 位）",
+          "d": 0,
+          "g": "pre"
+        },
+        {
+          "t": "換泰銖／準備現金",
+          "d": 0,
+          "g": "pre"
+        },
+        {
+          "t": "確認 12/26 晚住宿（Outlook 未見訂單）",
+          "d": 0,
+          "g": "pre"
+        },
+        {
+          "t": "手機網卡／eSIM",
+          "d": 0,
+          "g": "pre"
+        },
+        {
+          "t": "轉接頭（泰國 Type A／B／C）",
+          "d": 0,
+          "g": "pre"
+        },
+        {
+          "t": "防蚊／防曬",
+          "d": 0,
+          "g": "pre"
+        },
+        {
+          "t": "網上預辦登機（澳門航空）",
+          "d": 0,
+          "g": "pre"
+        },
+        {
+          "t": "旅行保險",
+          "d": 0,
+          "g": "insurance"
+        }
+      ],
+      "members": []
+    }
+  ]
+}

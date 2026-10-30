@@ -231,18 +231,87 @@ const KZ_BOOKINGS = {
   ]
 };
 const KZ_DEFAULT_TODOS = [
-  { t: '買北九州 5 日券（官網最平）', d: 0 },
-  { t: '確認 11/22 傍晚新幹線班次', d: 0 },
-  { t: '黑川溫泉巴士預約', d: 0 },
-  { t: '軍艦島登島票', d: 0 },
-  { t: '貓島渡輪 或 大濠公園計劃', d: 0 },
-  { t: '換日圓 / 交通卡', d: 0 }
+  { t: '買北九州 5 日券（官網最平）', d: 0, g: 'pre' },
+  { t: '確認 11/22 傍晚新幹線班次', d: 0, g: 'pre' },
+  { t: '黑川溫泉巴士預約', d: 0, g: 'pre' },
+  { t: '軍艦島登島票', d: 0, g: 'pre' },
+  { t: '貓島渡輪 或 大濠公園計劃', d: 0, g: 'pre' },
+  { t: '換日圓 / 交通卡', d: 0, g: 'pre' },
+  { t: '護照同證件', d: 0, g: 'pre' },
+  { t: '手機網卡／eSIM', d: 0, g: 'pre' },
+  { t: '旅行保險', d: 0, g: 'insurance' }
 ];
 const KZ_DEFAULT_SHOP = [
-  { id: 1, n: '努努雞', note: '', cat: '零食', pri: 0, done: 0, img: '' },
-  { id: 2, n: '明太子', note: '', cat: '零食', pri: 0, done: 0, img: '' },
-  { id: 3, n: '鹽昆布', note: '', cat: '零食', pri: 0, done: 0, img: '' }
+  { id: 1, n: '努努雞', note: '福岡機場／市區手信', cat: '零食', pri: 1, done: 0, img: '' },
+  { id: 2, n: '明太子', note: '博多名物', cat: '零食', pri: 1, done: 0, img: '' },
+  { id: 3, n: '鹽昆布', note: '', cat: '零食', pri: 0, done: 0, img: '' },
+  { id: 4, n: 'FILTER SUPPLY 咖啡豆', note: '11/27 必去', cat: '其他', pri: 1, done: 0, img: '' },
+  { id: 5, n: '博多通りもん', note: '手信餅', cat: '零食', pri: 0, done: 0, img: '' },
+  { id: 6, n: '黑川／溫泉手信', note: '黑川溫泉日歸', cat: '其他', pri: 0, done: 0, img: '' },
+  { id: 7, n: '長崎蛋糕／卡斯特拉', note: '長崎手信', cat: '零食', pri: 0, done: 0, img: '' }
 ];
+/* Thailand from Outlook (no 預約編號 in seed) */
+const TH_BOOKINGS = {
+  flights: [
+    { id:'tf1', route:'澳門 → 曼谷', from:'MFM', to:'BKK', dep:'10:20', arr:'12:30', flightNo:'NX936', date:'2026-12-24', people:2, amount:0, note:'澳門航空 · 澳門國際機場 → 素萬那普機場 · 經濟艙 A320 · 2 位' },
+    { id:'tf2', route:'曼谷 → 澳門', from:'BKK', to:'MFM', dep:'13:30', arr:'17:35', flightNo:'NX935', date:'2026-12-27', people:2, amount:0, note:'澳門航空 · 素萬那普機場 → 澳門國際機場 · 經濟艙 A320 · 2 位' }
+  ],
+  stays: [
+    { id:'ts1', name:'曼谷柏悦酒店', dates:'12/24（15:00 後）– 12/26（12:00 前）', checkIn:'2026-12-24', checkOut:'2026-12-26', meta:'Central Embassy, 88 Witthayu Rd, Lumphini · 豪華房 · 特大雙人床 · 含早餐（25、26日）· 2 成人', q:'Park Hyatt Bangkok', people:2, amount:0 }
+  ]
+};
+const TH_DEFAULT_TODOS = [
+  { t: '護照同證件（2 位）', d: 0, g: 'pre' },
+  { t: '換泰銖／準備現金', d: 0, g: 'pre' },
+  { t: '確認 12/26 晚住宿（Outlook 未見訂單）', d: 0, g: 'pre' },
+  { t: '手機網卡／eSIM', d: 0, g: 'pre' },
+  { t: '轉接頭（泰國 Type A／B／C）', d: 0, g: 'pre' },
+  { t: '防蚊／防曬', d: 0, g: 'pre' },
+  { t: '網上預辦登機（澳門航空）', d: 0, g: 'pre' },
+  { t: '旅行保險', d: 0, g: 'insurance' }
+];
+const TH_DEFAULT_SHOP = [
+  { id: 101, n: '芒果乾', note: '機場／超市', cat: '零食', pri: 1, done: 0, img: '' },
+  { id: 102, n: '泰式香料／咖喱醬', note: '', cat: '其他', pri: 0, done: 0, img: '' },
+  { id: 103, n: '椰子油／護膚', note: '', cat: '其他', pri: 0, done: 0, img: '' },
+  { id: 104, n: 'Chatuchak／夜市小物', note: '', cat: '其他', pri: 0, done: 0, img: '' },
+  { id: 105, n: '泰式奶茶／手標茶', note: '', cat: '零食', pri: 0, done: 0, img: '' }
+];
+function buildThailandTrip() {
+  return createTrip({
+    id: 't-thai', title: '曼谷小旅', destination: '曼谷', startDate: '2026-12-24', endDate: '2026-12-27',
+    currency: 'THB', cover: '',
+    bookings: JSON.parse(JSON.stringify(TH_BOOKINGS)),
+    budget: { total: 0, rate: 0.22, expenses: [] },
+    shop: TH_DEFAULT_SHOP.map(x => Object.assign({}, x)),
+    todos: TH_DEFAULT_TODOS.map(x => Object.assign({}, x)),
+    members: [], _noAdd: true
+  });
+}
+const SEED_VER = 2;
+function ensureSeed() {
+  if ((APP.seedVersion || 1) >= SEED_VER) return false;
+  let changed = false;
+  const kz = APP.trips.find(t => t.id === 't1' || t.title === '九州小旅');
+  if (kz) {
+    if (!Array.isArray(kz.shop)) kz.shop = [];
+    if (!Array.isArray(kz.todos)) kz.todos = [];
+    const haveS = new Set(kz.shop.map(x => x.n));
+    KZ_DEFAULT_SHOP.forEach(x => {
+      if (!haveS.has(x.n)) { kz.shop.push(Object.assign({}, x, { id: Date.now() + Math.floor(Math.random()*999) })); changed = true; }
+    });
+    const haveT = new Set(kz.todos.map(x => x.t));
+    KZ_DEFAULT_TODOS.forEach(x => {
+      if (!haveT.has(x.t)) { kz.todos.push(Object.assign({}, x)); changed = true; }
+    });
+    kz.todos.forEach(o => { if (!o.g) o.g = 'pre'; });
+  }
+  const hasThai = APP.trips.some(t => t.id === 't-thai' || /泰國|曼谷|Thai|Bangkok/i.test((t.title || '') + (t.destination || '')));
+  if (!hasThai) { APP.trips.push(buildThailandTrip()); changed = true; }
+  APP.seedVersion = SEED_VER;
+  persist();
+  return changed;
+}
 function toDays(src, start) {
   const s0 = pd(start);
   return src.map((d, i) => {
@@ -285,7 +354,8 @@ function migrate() {
     todos: Array.isArray(todos) ? todos : KZ_DEFAULT_TODOS.map(x => Object.assign({}, x)),
     members: [], _noAdd: true
   });
-  return { version: 1, activeTripId: 't1', settings, trips: [t1] };
+  const tThai = buildThailandTrip();
+  return { version: 1, seedVersion: SEED_VER, activeTripId: 't1', settings, trips: [t1, tThai] };
 }
 let APP = null;
 function persist() { store.set(APP_KEY, APP); }
@@ -300,6 +370,20 @@ function loadApp() {
   return migrate();
 }
 APP = loadApp(); persist();
+ensureSeed();
+/* ?seed=1 → 載入示範備份（覆蓋本機資料） */
+(function(){
+  try {
+    const q = new URLSearchParams(location.search);
+    if (q.get('seed') === '1') {
+      fetch('travel-backup-20261030.json').then(r => r.json()).then(data => {
+        if (!data || data.version !== 1 || !Array.isArray(data.trips)) return;
+        APP = data; persist();
+        location.replace(location.pathname);
+      }).catch(() => {});
+    }
+  } catch (e) {}
+})();
 function getTrip(id) { return APP.trips.find(t => t.id === (id || APP.activeTripId)) || APP.trips[0]; }
 function saveTrip(t) {
   if (t) { const i = APP.trips.findIndex(x => x.id === t.id); if (i >= 0) APP.trips[i] = t; else APP.trips.push(t); }
@@ -1388,5 +1472,48 @@ setFx(FX.some(f => f[0] === savedFx) ? savedFx : 'leaf');
 
 /* CSS for toggle.on */
 (function(){ const s=document.createElement('style'); s.textContent=`.toggle{width:48px;height:28px;border-radius:99px;border:3px solid var(--line);background:#ddd;position:relative;flex:none}.toggle::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}.toggle.on,.toggle[aria-pressed="true"]{background:var(--pri);border-color:var(--pri)}.toggle.on::after,.toggle[aria-pressed="true"]::after{left:22px}`; document.head.appendChild(s); })();
+
+
+/* ---------- backup export/import (Station 5 lite) ---------- */
+function exportBackup() {
+  const blob = new Blob([JSON.stringify(APP, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'travel-backup-' + isoDate(new Date()).replace(/-/g, '') + '.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  toast('已匯出備份');
+}
+function importBackupFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!data || data.version !== 1 || !Array.isArray(data.trips) || !data.trips.length) throw new Error('格式唔啱');
+      confirmAsk('匯入會覆蓋而家手機入面全部旅程資料，確定？', () => {
+        APP = data;
+        APP.seedVersion = Math.max(APP.seedVersion || 1, SEED_VER);
+        persist();
+        toast('已匯入，重新整理緊…');
+        setTimeout(() => location.reload(), 600);
+      });
+    } catch (e) { toast('匯入失敗：檔案格式唔啱'); }
+  };
+  reader.readAsText(file);
+}
+if ($('btnExport')) $('btnExport').onclick = exportBackup;
+if ($('btnImport')) $('btnImport').onclick = () => $('importFile') && $('importFile').click();
+if ($('importFile')) $('importFile').onchange = e => { importBackupFile(e.target.files[0]); e.target.value = ''; };
+if ($('btnLoadDemo')) $('btnLoadDemo').onclick = () => {
+  confirmAsk('載入示範資料（九州＋曼谷）會覆蓋本機全部旅程，確定？', () => {
+    fetch('travel-backup-20261030.json').then(r => r.json()).then(data => {
+      if (!data || data.version !== 1) throw new Error('bad');
+      APP = data; persist();
+      toast('已載入示範資料');
+      setTimeout(() => location.reload(), 600);
+    }).catch(() => toast('載入失敗，請稍後再試'));
+  });
+};
 
 showDay(0);
