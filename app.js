@@ -550,8 +550,7 @@ function ensureSeed() {
   if (renameTripTitles()) always = true;
   if (ensurePartyMembers()) always = true;
   if (ensureDepartTimes()) always = true;
-  if (typeof migrateKyushuDayCats === 'function' && migrateKyushuDayCats()) always = true;
-  if (typeof migrateBangkokStickers === 'function' && migrateBangkokStickers()) always = true;
+  /* migrateKyushuDayCats / migrateBangkokStickers：必須喺 STICKERS／KZ_DAY_CATS 定義之後先跑（見下方 IIFE），呢度 call 會 TDZ 整頁死機 */
   if ((APP.seedVersion || 1) >= SEED_VER) {
     if (always) persist();
     return always;
