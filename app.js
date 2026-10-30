@@ -2132,3 +2132,40 @@ if ($('backupBannerDismiss')) $('backupBannerDismiss').onclick = () => dismissBa
 checkBackupReminder();
 
 showDay(0);
+
+
+/* ---------- Station 6: PWA service worker ---------- */
+function registerTravelSW() {
+  if (!('serviceWorker' in navigator)) return;
+  const showUpdate = (worker) => {
+    const ban = document.getElementById('swUpdateBanner');
+    const btn = document.getElementById('swUpdateReload');
+    if (!ban || !btn || !worker) return;
+    ban.hidden = false;
+    btn.onclick = () => {
+      try { worker.postMessage({ type: 'SKIP_WAITING' }); } catch (e) {}
+    };
+  };
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    if (reg.waiting) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const nw = reg.installing;
+      if (!nw) return;
+      nw.addEventListener('statechange', () => {
+        if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+          showUpdate(reg.waiting || nw);
+        }
+      });
+    });
+    try { setInterval(() => { try { reg.update(); } catch (e) {} }, 60 * 60 * 1000); } catch (e) {}
+  }).catch(() => {});
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshing) return;
+    refreshing = true;
+    location.reload();
+  });
+}
+if (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+  registerTravelSW();
+}

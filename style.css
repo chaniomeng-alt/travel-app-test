@@ -457,3 +457,8 @@ body.dark .backup-banner { background: #4A3A30; border-color: #5A4636; color: va
 .party-av { width:36px; height:36px; border-radius:50%; background:var(--cream, #F7F3EA); border:2px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:1.1rem; flex:none; }
 .party-row b { display:block; font-size:.95rem; }
 .party-row small { color: var(--soft); font-size:.8rem; }
+
+/* Station 6 — SW update banner */
+.sw-update-banner { z-index: 100; background: #E89F9F; color: #fff; border-color: #5A4636; }
+.sw-update-banner .btn { background: #fff; color: #5A4636; }
+body.dark .sw-update-banner { background: #E89F9F; color: #fff; border-color: #5A4636; }
