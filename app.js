@@ -820,6 +820,12 @@ const STICKERS = {
   bowl: { name: '碗貓', src: 'assets/stickers/sticker-bowl.png' },
   shop: { name: '購物貓' }, bags: { name: '手袋貓' }, girl: { name: '女仔' }
 };
+(function applyKyushuMultiSrc() {
+  const m = (typeof window !== 'undefined' && window.KZ_MULTI_SRC) || {};
+  Object.keys(m).forEach(k => {
+    if (STICKERS[k] && m[k]) STICKERS[k].src = m[k];
+  });
+})();
 const stkHTML = k => { const a = STICKERS[k] || {}; return a.src ? `<img src="${a.src}" alt="${a.name || k}" draggable="false">` : cat(k); };
 /* dog vs cat sticker sets — Bangkok uses dogs; Kyushu keeps cats-first */
 const DOG_STICKER_RE = /^(dog\d+|pet)/i;
