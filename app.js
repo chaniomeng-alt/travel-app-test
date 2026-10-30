@@ -280,7 +280,7 @@ const TH_DEFAULT_SHOP = [
 function buildThailandTrip() {
   return createTrip({
     id: 't-thai', title: '曼谷小旅', destination: '曼谷', startDate: '2026-12-24', endDate: '2026-12-27',
-    currency: 'THB', cover: 'assets/covers/bangkok.png',
+    currency: 'THB', cover: 'assets/covers/bangkok.png?v=4',
     bookings: JSON.parse(JSON.stringify(TH_BOOKINGS)),
     budget: { total: 0, rate: 0.22, expenses: [] },
     shop: TH_DEFAULT_SHOP.map(x => Object.assign({}, x)),
@@ -288,18 +288,24 @@ function buildThailandTrip() {
     members: [], _noAdd: true
   });
 }
-const COVER_KYUSHU = 'assets/covers/kyushu.png';
-const COVER_BANGKOK = 'assets/covers/bangkok.png';
-const SEED_VER = 3;
+const COVER_KYUSHU = 'assets/covers/kyushu.png?v=4';
+const COVER_BANGKOK = 'assets/covers/bangkok.png?v=4';
+const SEED_VER = 4;
 function ensureDefaultCovers() {
   let changed = false;
   (APP.trips || []).forEach(t => {
-    if (!t || (t.cover && String(t.cover).trim())) return;
+    if (!t) return;
     const blob = ((t.title || '') + ' ' + (t.destination || '')).trim();
-    if (t.id === 't1' || t.title === '九州小旅' || /九州/.test(blob)) {
+    const cov = String(t.cover || '').trim();
+    const isKz = t.id === 't1' || t.title === '九州小旅' || /九州/.test(blob);
+    const isBk = t.id === 't-thai' || t.title === '曼谷小旅' || /曼谷|泰國|Bangkok|Thai/i.test(blob);
+    if (isKz && (!cov || /^assets\/covers\/kyushu\.png(\?v=\d+)?$/.test(cov)) && cov !== COVER_KYUSHU) {
       t.cover = COVER_KYUSHU; changed = true;
-    } else if (t.id === 't-thai' || t.title === '曼谷小旅' || /曼谷|泰國|Bangkok|Thai/i.test(blob)) {
+    } else if (isBk && (!cov || /^assets\/covers\/bangkok\.png(\?v=\d+)?$/.test(cov)) && cov !== COVER_BANGKOK) {
       t.cover = COVER_BANGKOK; changed = true;
+    } else if (!cov) {
+      if (isKz) { t.cover = COVER_KYUSHU; changed = true; }
+      else if (isBk) { t.cover = COVER_BANGKOK; changed = true; }
     }
   });
   return changed;
@@ -366,7 +372,7 @@ function migrate() {
   const shop = old('kz_shop2');
   const todos = old('kz_todos');
   const t1 = createTrip({
-    id: 't1', title: '九州小旅', destination: '九州', startDate: '2026-11-22', endDate: '2026-11-28', currency: 'JPY', cover: 'assets/covers/kyushu.png',
+    id: 't1', title: '九州小旅', destination: '九州', startDate: '2026-11-22', endDate: '2026-11-28', currency: 'JPY', cover: 'assets/covers/kyushu.png?v=4',
     days: toDays(Array.isArray(oldDays) && oldDays.length ? oldDays : KZ_DEFAULT_DAYS, '2026-11-22'),
     bookings: JSON.parse(JSON.stringify(KZ_BOOKINGS)),
     budget: { total: +old('kz_budget') || 0, rate: +old('kz_rate') || 0.052, expenses: Array.isArray(exps) ? exps : [] },
@@ -512,7 +518,7 @@ const IN_TRIP = location.hash === '#trip';
 function enterTrip(id) { setActiveTrip(id); location.hash = 'trip'; location.reload(); }
 document.getElementById('backHome').onclick = () => { history.replaceState(null, '', location.pathname + location.search); location.reload(); };
 function daysBetween(a, b) { return Math.round((pd(b) - pd(a)) / 864e5) + 1; }
-const escH = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const escH = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&', '<': '<', '>': '>', '"': '"' }[c]));
 const coverCSS = c => !c ? `background:${COVERS[0]}` : c.startsWith('#') ? `background:${c}` : `background-image:url('${c}')`;
 function renderHome() {
   const L = document.getElementById('tripList'); L.innerHTML = '';
@@ -922,7 +928,8 @@ document.querySelectorAll('#nav button').forEach(b => b.onclick = () => {
   window.scrollTo({ top: 0 });
 });
 $('stk-top').innerHTML = `<div style="position:absolute;left:0;top:6px;width:64px;height:64px">${cat('sakura')}</div><div style="position:absolute;right:0;top:0;width:70px;height:70px">${cat('maneki')}</div>`;
-const stkList = $('stk-list'); if (stkList) stkList.innerHTML = cat('bags');
+const stkShop = $('stk-shop'); if (stkShop) stkShop.innerHTML = cat('bags');
+const stkTodo = $('stk-todo'); if (stkTodo) stkTodo.innerHTML = cat('maneki');
 const pgirl = $('pgirl'); if (pgirl) pgirl.innerHTML = '<img src="assets/shop/shop-girl.png" alt="">';
 const pboy = $('pboy'); if (pboy) pboy.innerHTML = '<img src="assets/shop/shop-boy.png" alt="">';
 $('stk-bud').innerHTML = cat('shop');
@@ -1245,12 +1252,7 @@ function renderBudget() {
 }
 renderBudget();
 
-/* ---------- list: shop + todo (4d) ---------- */
-document.querySelectorAll('#listTabs .tab').forEach(b => b.onclick = () => {
-  document.querySelectorAll('#listTabs .tab').forEach(x => x.classList.toggle('on', x === b));
-  $('listShop').hidden = b.dataset.list !== 'shop';
-  $('listTodo').hidden = b.dataset.list !== 'todo';
-});
+/* ---------- shop + todo (separate tabs) ---------- */
 const SCATS = ['零食', '藥妝', '服飾', '紀念品', '其他'];
 let shop = trip.shop || [];
 $('spCat').innerHTML = SCATS.map(c => `<option>${c}</option>`).join('');
@@ -1381,70 +1383,170 @@ $('todoDefaults').onclick = () => {
 renderTodos();
 
 /* ---------- weather (4e) ---------- */
-const WX_CACHE_KEY = 'travel_wx_cache_v1';
+const WX_CACHE_KEY = 'travel_wx_cache_v2';
 const WX_CODE = {
   0:['晴朗','☀️'],1:['大致晴','🌤'],2:['間中有雲','⛅'],3:['多雲','☁️'],
   45:['有霧','🌫'],48:['霧凇','🌫'],51:['微毛雨','🌦'],53:['毛雨','🌦'],55:['大毛雨','🌧'],
   61:['小雨','🌧'],63:['中雨','🌧'],65:['大雨','🌧'],71:['小雪','🌨'],73:['中雪','🌨'],75:['大雪','❄️'],
   80:['驟雨','🌦'],81:['驟雨','🌧'],82:['暴雨','⛈'],95:['雷暴','⛈'],96:['雷暴夾雹','⛈'],99:['強雷暴夾雹','⛈']
 };
+/* Monthly climate fallbacks °C [hi, lo] when archive unavailable — not live forecasts */
+const DEST_MONTH_CLIMATE = {
+  '九州': { 11:[17,10], 12:[12,5] },
+  '福岡': { 11:[17,10], 12:[12,5] },
+  '熊本': { 11:[18,9], 12:[13,4] },
+  '長崎': { 11:[17,11], 12:[13,6] },
+  '黑川': { 11:[14,6], 12:[9,1] },
+  '曼谷': { 11:[32,24], 12:[31,22] },
+  '泰國曼谷': { 11:[32,24], 12:[31,22] },
+  'Bangkok': { 11:[32,24], 12:[31,22] },
+  '東京': { 11:[16,9], 12:[12,4] },
+  '大阪': { 11:[16,9], 12:[12,4] },
+  '首爾': { 11:[12,3], 12:[5,-3] },
+  '台北': { 11:[25,18], 12:[22,15] }
+};
 let wxCache = store.get(WX_CACHE_KEY, {});
 function wxLabel(code) { return WX_CODE[code] || ['天氣資料','🌡']; }
+function monthOf(iso) { return +String(iso).slice(5, 7); }
+function shiftYear(iso, y) {
+  const m = String(iso).slice(5, 7), d = String(iso).slice(8, 10);
+  let dd = +d;
+  if (m === '02' && dd === 29) {
+    const leap = (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+    if (!leap) dd = 28;
+  }
+  return y + '-' + m + '-' + String(dd).padStart(2, '0');
+}
+function climateFallbackForDay(d) {
+  if (d.temp && d.temp.length >= 2) return { hi: +d.temp[0], lo: +d.temp[1], source: 'static' };
+  const place = (d.place || trip.destination || '').trim();
+  const mon = monthOf(d.date);
+  const keys = [place, trip.destination].filter(Boolean);
+  for (const k of keys) {
+    const row = DEST_MONTH_CLIMATE[k];
+    if (row && row[mon]) return { hi: row[mon][0], lo: row[mon][1], source: 'table' };
+  }
+  // generic mild defaults by hemisphere-ish month (never presented as live)
+  const mild = { 1:[12,4],2:[13,5],3:[16,8],4:[20,12],5:[24,16],6:[27,20],7:[30,23],8:[30,23],9:[27,20],10:[22,15],11:[17,10],12:[14,7] };
+  const t = mild[mon] || [20,12];
+  return { hi: t[0], lo: t[1], source: 'generic' };
+}
+async function fetchArchiveNormals(lat, lon, dates) {
+  if (!dates.length) return {};
+  const years = [2021, 2022, 2023];
+  const sums = {}, counts = {};
+  await Promise.all(years.map(async y => {
+    try {
+      const start = shiftYear(dates[0], y), end = shiftYear(dates[dates.length - 1], y);
+      const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${start}&end_date=${end}&daily=temperature_2m_max,temperature_2m_min&timezone=auto`;
+      const data = await (await fetch(url)).json();
+      const daily = data && data.daily;
+      if (!daily || !daily.time) return;
+      daily.time.forEach((t, i) => {
+        const md = t.slice(5);
+        const hi = daily.temperature_2m_max[i], lo = daily.temperature_2m_min[i];
+        if (hi == null || lo == null || Number.isNaN(+hi) || Number.isNaN(+lo)) return;
+        if (!sums[md]) { sums[md] = [0, 0]; counts[md] = 0; }
+        sums[md][0] += +hi; sums[md][1] += +lo; counts[md] += 1;
+      });
+    } catch (e) { /* ignore year */ }
+  }));
+  const out = {};
+  Object.keys(sums).forEach(md => {
+    const n = counts[md];
+    if (!n) return;
+    out[md] = { hi: Math.round(sums[md][0] / n), lo: Math.round(sums[md][1] / n), source: 'archive' };
+  });
+  return out;
+}
+function wxForDay(d) {
+  const c = wxCache[trip.id] || {};
+  const live = c.byDate && c.byDate[d.date];
+  if (live) return { hi: live.hi, lo: live.lo, code: live.code, kind: 'live' };
+  // Curated per-day static temps (九州原稿) beat generic destination archive
+  if (d.temp && d.temp.length >= 2) return { hi: +d.temp[0], lo: +d.temp[1], kind: 'ref', source: 'static' };
+  const md = String(d.date).slice(5);
+  const ref = c.refByMd && c.refByMd[md];
+  if (ref) return { hi: ref.hi, lo: ref.lo, kind: 'ref', source: ref.source || 'archive' };
+  const fb = climateFallbackForDay(d);
+  return { hi: fb.hi, lo: fb.lo, kind: 'ref', source: fb.source };
+}
+const GEO_ALIASES = {
+  '九州': '福岡', 'Kyushu': 'Fukuoka', '日本九州': '福岡',
+  '曼谷': 'Bangkok', '泰國曼谷': 'Bangkok', '泰京': 'Bangkok',
+  '東京': 'Tokyo', '大阪': 'Osaka', '首爾': 'Seoul', '台北': 'Taipei'
+};
+async function resolveGeo(dest) {
+  const q = GEO_ALIASES[dest] || dest || '福岡';
+  const geo = await (await fetch('https://geocoding-api.open-meteo.com/v1/search?name=' + encodeURIComponent(q) + '&count=5&language=zh&format=json')).json();
+  if (!geo.results || !geo.results.length) throw new Error('no geo');
+  // Prefer city/town over mountain/island when possible
+  const prefer = geo.results.find(r => ['PPLC','PPLA','PPLA2','PPLA3','PPLA4','PPL'].includes(r.feature_code)) || geo.results[0];
+  // Avoid high-elevation misfires (>800m) if a lower alternative exists
+  const low = geo.results.find(r => (r.elevation == null || r.elevation < 800));
+  const pick = (prefer && (prefer.elevation == null || prefer.elevation < 800)) ? prefer : (low || prefer);
+  return { lat: pick.latitude, lon: pick.longitude, name: pick.name };
+}
 async function fetchWeather() {
   const dest = trip.destination || '九州';
   $('wxSub').textContent = dest + ' · Open-Meteo';
   const grid = $('wxGrid');
   grid.innerHTML = '<div class="empty">載入緊…</div>';
+  const dates = (days || []).map(d => d.date).filter(Boolean).sort();
   try {
-    const geo = await (await fetch('https://geocoding-api.open-meteo.com/v1/search?name=' + encodeURIComponent(dest) + '&count=1&language=zh&format=json')).json();
-    if (!geo.results || !geo.results.length) throw new Error('no geo');
-    const { latitude: lat, longitude: lon, name } = geo.results[0];
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=16`;
-    const data = await (await fetch(url)).json();
-    const daily = data.daily;
-    const byDate = {};
-    daily.time.forEach((t, i) => {
-      byDate[t] = { hi: Math.round(daily.temperature_2m_max[i]), lo: Math.round(daily.temperature_2m_min[i]), code: daily.weathercode[i] };
-    });
-    wxCache[trip.id] = { dest: name, updated: Date.now(), byDate };
+    const { lat, lon, name } = await resolveGeo(dest);
+    let byDate = {};
+    try {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=16`;
+      const data = await (await fetch(url)).json();
+      const daily = data.daily;
+      if (daily && daily.time) {
+        daily.time.forEach((t, i) => {
+          byDate[t] = { hi: Math.round(daily.temperature_2m_max[i]), lo: Math.round(daily.temperature_2m_min[i]), code: daily.weathercode[i] };
+        });
+      }
+    } catch (e) { /* forecast optional */ }
+    let refByMd = {};
+    try { refByMd = await fetchArchiveNormals(lat, lon, dates); } catch (e) { refByMd = {}; }
+    wxCache[trip.id] = { dest: name, updated: Date.now(), byDate, refByMd, lat, lon };
     store.set(WX_CACHE_KEY, wxCache);
     renderWeatherPage();
     showDay(currentDay);
   } catch (e) {
-    $('wxHint').textContent = '未能取得天氣，請稍後再試';
-    grid.innerHTML = '<div class="empty">天氣載入失敗，會用暫存或季節參考</div>';
+    $('wxHint').textContent = '未能連線 Open-Meteo，會用季節參考／靜態氣溫';
+    if (!wxCache[trip.id]) wxCache[trip.id] = { dest, updated: Date.now(), byDate: {}, refByMd: {} };
     renderWeatherPage();
+    showDay(currentDay);
   }
 }
 function renderWeatherPage() {
   const c = wxCache[trip.id];
   const grid = $('wxGrid');
-  if (!c || !c.byDate) {
-    grid.innerHTML = days.map(d => `<div class="card"><div class="w-temp">${d.date.slice(5)}</div><div class="w-note">未有預報，出發前再睇</div></div>`).join('');
-    return;
-  }
-  $('wxHint').textContent = `資料來自 Open-Meteo · 更新於 ${new Date(c.updated).toLocaleString('zh-HK')}`;
+  const when = c && c.updated ? new Date(c.updated).toLocaleString('zh-HK') : '';
+  $('wxHint').textContent = when
+    ? `資料來自 Open-Meteo · 更新於 ${when} · 「季節參考」係往年同期平均／靜態氣溫，唔係即時預報`
+    : '標「季節參考」唔係即時預報；出發前約兩星期會有真預報';
   grid.innerHTML = days.map(d => {
-    const w = c.byDate[d.date];
-    if (!w) return `<div class="card"><b>${d.date.slice(5)}</b><div class="w-note">未有預報，出發前再睇</div></div>`;
-    const [lab, icon] = wxLabel(w.code);
-    return `<div class="card"><div style="font-size:1.6rem">${icon}</div><b>${d.date.slice(5)}</b><div class="w-temp">${w.hi}° / ${w.lo}°</div><div class="w-note">${lab}</div></div>`;
+    const w = wxForDay(d);
+    const label = String(d.date).slice(5).replace('-', '/');
+    const place = escH(d.place || trip.destination || '');
+    if (w.kind === 'live') {
+      const [lab, icon] = wxLabel(w.code);
+      return `<div class="card"><div style="font-size:1.6rem">${icon}</div><b>${label}</b>${place ? `<div class="w-note">${place}</div>` : ''}<div class="w-temp">${w.hi}° / ${w.lo}°</div><div class="w-note">${lab}</div><span class="wx-badge live">預報</span></div>`;
+    }
+    return `<div class="card wx-ref"><div style="font-size:1.6rem">🌡</div><b>${label}</b>${place ? `<div class="w-note">${place}</div>` : ''}<div class="w-temp">${w.hi}° / ${w.lo}°</div><div class="w-note ref">季節參考</div><span class="wx-badge">季節參考 · 非預報</span></div>`;
   }).join('');
 }
 function renderDayWeather(d) {
   const wEl = $('weather');
-  const c = wxCache[trip.id];
-  const w = c && c.byDate && c.byDate[d.date];
-  if (w) {
+  const w = wxForDay(d);
+  wEl.style.display = '';
+  const place = escH(d.place || trip.destination || '');
+  if (w.kind === 'live') {
     const [lab, icon] = wxLabel(w.code);
-    wEl.style.display = '';
-    wEl.innerHTML = `<div class="w-ic" style="font-size:1.6rem">${icon}</div><div><div class="w-temp">${w.hi}°C <i>/ ${w.lo}°C</i></div><div class="w-note">${lab}</div></div><div class="w-right">${escH(trip.destination || '')}<small>最高 / 最低</small></div>`;
-  } else if (d.temp && d.temp.length) {
-    wEl.style.display = '';
-    wEl.innerHTML = `<div class="w-ic">${ic('cloud')}</div><div><div class="w-temp">${d.temp[0]}°C <i>/ ${d.temp[1]}°C</i></div><div class="w-note">季節參考／未有預報</div></div><div class="w-right">${escH(d.place || trip.destination || '')}<small>最高 / 最低</small></div>`;
+    wEl.innerHTML = `<div class="w-ic" style="font-size:1.6rem">${icon}</div><div><div class="w-temp">${w.hi}°C <i>/ ${w.lo}°C</i></div><div class="w-note">${lab}</div></div><div class="w-right">${place}<small>最高 / 最低 · 預報</small></div>`;
   } else {
-    wEl.style.display = '';
-    wEl.innerHTML = `<div class="w-ic">${ic('cloud')}</div><div><div class="w-temp">—</div><div class="w-note">未有預報，出發前再睇</div></div>`;
+    wEl.innerHTML = `<div class="w-ic">${ic('cloud')}</div><div><div class="w-temp">${w.hi}°C <i>/ ${w.lo}°C</i></div><div class="w-note ref">季節參考 · 非即時預報</div></div><div class="w-right">${place}<small>最高 / 最低</small></div>`;
   }
 }
 fetchWeather();
