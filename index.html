@@ -17,6 +17,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <script src="assets/vendor/sortable.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script defer src="app.js"></script>
 </head>
 <body>
@@ -275,7 +278,7 @@
       <p class="hint" style="margin:0 0 10px">按支出「付款人」同人數平均分攤；未標付款人嘅支出唔計入已付。</p>
       <div id="settleList"></div>
     </div>
-    <p class="hint" id="memHint">頭像可以上載或者揀預設貓／狗。雲端同步係第 8b 站（未做）。</p>
+    <p class="hint" id="memHint">頭像可以上載或者揀預設貓／狗。登入「設定 → 雲端帳號」可同步旅程文字資料；附件仍本機。</p>
   </section>
 
   <section class="view" id="v-set">
@@ -303,6 +306,28 @@
       <div class="set-h"><div class="ci">👥</div><div><b>人員</b><small id="partySub">呢個旅程嘅旅客</small></div></div>
       <div id="partyList" style="margin-top:10px"></div>
       <button type="button" class="btn ghost" id="partyGoMem" style="width:100%;margin-top:10px">去「成員」分頁管理</button>
+    </div>
+    <div class="card" id="cloudCard">
+      <div class="set-h"><div class="ci">☁️</div><div><b>雲端帳號</b><small id="cloudSub">登入後同步旅程到 Firebase（本機資料唔會自動清）</small></div></div>
+      <div id="cloudSignedOut">
+        <label>電郵<input class="fld" type="email" id="cloudEmail" autocomplete="username" placeholder="you@example.com" style="width:100%;margin-top:6px"></label>
+        <label style="display:block;margin-top:8px">密碼<input class="fld" type="password" id="cloudPass" autocomplete="current-password" placeholder="至少 6 個字元" style="width:100%;margin-top:6px"></label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+          <button type="button" class="btn" id="btnCloudSignIn">登入</button>
+          <button type="button" class="btn ghost" id="btnCloudSignUp">註冊</button>
+          <button type="button" class="btn ghost" id="btnCloudGoogle">用 Google 登入</button>
+        </div>
+        <p class="hint" style="margin-top:8px">註冊用電郵＋密碼。Google 登入要喺 Firebase Console 開咗 Google 供應商，同埋授權網域加咗呢個站。</p>
+      </div>
+      <div id="cloudSignedIn" hidden>
+        <p id="cloudUserLine" style="margin:0 0 8px;font-weight:700"></p>
+        <p class="hint" id="cloudSyncLine" style="margin:0 0 10px">同步狀態：—</p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <button type="button" class="btn" id="btnCloudSyncNow">立即同步</button>
+          <button type="button" class="btn ghost" id="btnCloudSignOut">登出</button>
+        </div>
+        <p class="hint" style="margin-top:8px">同步會上載／合併你有權限嘅旅程。預約附件（PDF／相）暫時仍只存本機 IndexedDB。邀請同伴稍後再加。</p>
+      </div>
     </div>
     <div class="card">
       <div class="set-h"><div class="ci">💾</div><div><b>備份同還原</b><small>匯出／匯入旅程資料（JSON）</small></div></div>

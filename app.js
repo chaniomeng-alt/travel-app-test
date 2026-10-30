@@ -610,7 +610,25 @@ function migrate() {
   return { version: 1, seedVersion: SEED_VER, activeTripId: 't1', settings, trips: [t1, tThai] };
 }
 let APP = null;
-function persist() { return store.set(APP_KEY, APP); }
+/* cloud sync flags (hoisted before first persist(); avoid TDZ) */
+var cloudApplyingRemote = false;
+var cloudUser = null;
+var cloudReady = false;
+var cloudSyncTimer = null;
+var cloudSyncing = false;
+var cloudLastStatus = '未登入';
+function persist() {
+  try {
+    if (!cloudApplyingRemote && APP && Array.isArray(APP.trips)) {
+      const now = Date.now();
+      const t = APP.trips.find(x => x.id === APP.activeTripId) || APP.trips[0];
+      if (t) t.updatedAt = now;
+    }
+  } catch (e) {}
+  const ok = store.set(APP_KEY, APP);
+  try { if (typeof scheduleCloudSync === 'function') scheduleCloudSync(); } catch (e) {}
+  return ok;
+}
 function loadApp() {
   const a = store.get(APP_KEY, null);
   if (a && a.version === 1 && Array.isArray(a.trips) && a.trips.length) {
@@ -638,14 +656,22 @@ ensureSeed();
 })();
 function getTrip(id) { return APP.trips.find(t => t.id === (id || APP.activeTripId)) || APP.trips[0]; }
 function saveTrip(t) {
-  if (t) { const i = APP.trips.findIndex(x => x.id === t.id); if (i >= 0) APP.trips[i] = t; else APP.trips.push(t); }
+  if (t) {
+    t.updatedAt = Date.now();
+    const i = APP.trips.findIndex(x => x.id === t.id);
+    if (i >= 0) APP.trips[i] = t; else APP.trips.push(t);
+  }
   persist();
 }
 function deleteTrip(id) {
   if (APP.trips.length <= 1) return false;
   APP.trips = APP.trips.filter(t => t.id !== id);
   if (APP.activeTripId === id) APP.activeTripId = APP.trips[0].id;
-  persist(); return true;
+  persist();
+  try {
+    if (typeof cloudDeleteTrip === 'function') cloudDeleteTrip(id);
+  } catch (e) {}
+  return true;
 }
 function setActiveTrip(id) { if (APP.trips.some(t => t.id === id)) { APP.activeTripId = id; persist(); return true; } return false; }
 function isInTripView() { return location.hash === '#trip'; }
@@ -2470,6 +2496,325 @@ if ($('backupBannerDismiss')) $('backupBannerDismiss').onclick = () => dismissBa
 checkBackupReminder();
 
 showDay(0);
+
+
+
+/* ---------- Station 8b: Firebase Auth + Firestore sync ---------- */
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyArozM-ttFNOyfLVrKT2HWLBmDqyYx8y-A',
+  authDomain: 'my-journey-d5690.firebaseapp.com',
+  projectId: 'my-journey-d5690',
+  storageBucket: 'my-journey-d5690.firebasestorage.app',
+  messagingSenderId: '135594737576',
+  appId: '1:135594737576:web:edeaae35dd4eb21b58679d'
+};
+
+let fbApp = null, fbAuth = null, fbDb = null;
+
+function cloudSetStatus(msg) {
+  cloudLastStatus = msg || '';
+  const el = $('cloudSyncLine');
+  if (el) el.textContent = '同步狀態：' + cloudLastStatus;
+  const sub = $('cloudSub');
+  if (sub && cloudUser) sub.textContent = '已登入 · 改行程會自動同步（約 1.5 秒後）';
+  else if (sub && !cloudUser) sub.textContent = '登入後同步旅程到 Firebase（本機資料唔會自動清）';
+}
+
+function cloudAuthError(err) {
+  const c = (err && err.code) || '';
+  if (c === 'auth/email-already-in-use') return '呢個電郵已經註冊過，請直接登入';
+  if (c === 'auth/invalid-email') return '電郵格式唔啱';
+  if (c === 'auth/weak-password') return '密碼至少要 6 個字元';
+  if (c === 'auth/user-not-found' || c === 'auth/wrong-password' || c === 'auth/invalid-credential') return '電郵或密碼唔啱';
+  if (c === 'auth/too-many-requests') return '嘗試太多次，請稍後再試';
+  if (c === 'auth/popup-closed-by-user') return '已取消 Google 登入';
+  if (c === 'auth/unauthorized-domain') return '網域未授權：請喺 Firebase Authentication → Settings → Authorized domains 加 chaniomeng-alt.github.io';
+  if (c === 'auth/operation-not-allowed') return '呢個登入方式未喺 Console 開啟';
+  if (c === 'auth/network-request-failed') return '網絡錯誤，請檢查連線';
+  return (err && err.message) ? String(err.message).slice(0, 120) : '登入失敗';
+}
+
+function initFirebase() {
+  if (typeof firebase === 'undefined' || !firebase.initializeApp) {
+    cloudSetStatus('Firebase SDK 未載入（離線或被擋）');
+    return false;
+  }
+  try {
+    fbApp = firebase.apps && firebase.apps.length ? firebase.app() : firebase.initializeApp(FIREBASE_CONFIG);
+    fbAuth = firebase.auth();
+    fbDb = firebase.firestore();
+    try { fbDb.enablePersistence({ synchronizeTabs: true }).catch(() => {}); } catch (e) {}
+    cloudReady = true;
+    fbAuth.onAuthStateChanged(async (user) => {
+      cloudUser = user || null;
+      renderCloudAccountUI();
+      if (user) {
+        cloudSetStatus('登入成功，合併雲端中…');
+        try {
+          await mergeCloudOnLogin();
+          cloudSetStatus('已同步 ' + new Date().toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+        } catch (e) {
+          console.warn('[cloud] merge', e);
+          cloudSetStatus('合併失敗：' + ((e && e.message) || '請稍後「立即同步」'));
+        }
+      } else {
+        cloudSetStatus('未登入');
+      }
+    });
+    return true;
+  } catch (e) {
+    console.warn('[cloud] init', e);
+    cloudSetStatus('初始化失敗');
+    return false;
+  }
+}
+
+function renderCloudAccountUI() {
+  const out = $('cloudSignedOut'), inn = $('cloudSignedIn'), line = $('cloudUserLine');
+  if (!out || !inn) return;
+  if (cloudUser) {
+    out.hidden = true;
+    inn.hidden = false;
+    if (line) line.textContent = '已登入：' + (cloudUser.email || cloudUser.uid);
+  } else {
+    out.hidden = false;
+    inn.hidden = true;
+  }
+  cloudSetStatus(cloudLastStatus);
+}
+
+function tripUpdatedAt(t) {
+  const n = t && +t.updatedAt;
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function stampTripsNow() {
+  const now = Date.now();
+  (APP.trips || []).forEach(t => { t.updatedAt = now; });
+  return now;
+}
+
+function scheduleCloudSync() {
+  if (!cloudReady || !cloudUser || cloudApplyingRemote) return;
+  if (cloudSyncTimer) clearTimeout(cloudSyncTimer);
+  cloudSyncTimer = setTimeout(() => { pushLocalToCloud().catch(e => console.warn('[cloud] push', e)); }, 1500);
+}
+
+async function fetchMyCloudTrips(uid) {
+  const map = new Map();
+  const q1 = await fbDb.collection('trips').where('ownerUid', '==', uid).get();
+  q1.forEach(doc => map.set(doc.id, doc.data()));
+  try {
+    const q2 = await fbDb.collection('trips').where('memberUids', 'array-contains', uid).get();
+    q2.forEach(doc => { if (!map.has(doc.id)) map.set(doc.id, doc.data()); });
+  } catch (e) {
+    console.warn('[cloud] member query', e);
+  }
+  return map;
+}
+
+async function mergeCloudOnLogin() {
+  if (!fbDb || !cloudUser) return;
+  const uid = cloudUser.uid;
+  const cloudMap = await fetchMyCloudTrips(uid);
+  let changed = false;
+  cloudApplyingRemote = true;
+  try {
+    const localById = new Map((APP.trips || []).map(t => [t.id, t]));
+
+    // Pull cloud trips that are newer or missing locally
+    cloudMap.forEach((cdata, id) => {
+      const remoteTrip = cdata && cdata.trip;
+      if (!remoteTrip || !remoteTrip.id) return;
+      const remoteAt = +cdata.updatedAt || tripUpdatedAt(remoteTrip) || 0;
+      const local = localById.get(id);
+      if (!local) {
+        APP.trips.push(Object.assign({}, remoteTrip, { updatedAt: remoteAt || Date.now() }));
+        localById.set(id, remoteTrip);
+        changed = true;
+        return;
+      }
+      const localAt = tripUpdatedAt(local);
+      if (remoteAt > localAt) {
+        const i = APP.trips.findIndex(t => t.id === id);
+        if (i >= 0) {
+          APP.trips[i] = Object.assign({}, remoteTrip, { updatedAt: remoteAt });
+          changed = true;
+        }
+      }
+    });
+
+    // Meta: activeTripId / settings from user doc if present and newer
+    try {
+      const uref = await fbDb.collection('users').doc(uid).get();
+      if (uref.exists) {
+        const u = uref.data() || {};
+        if (u.activeTripId && APP.trips.some(t => t.id === u.activeTripId)) {
+          if (APP.activeTripId !== u.activeTripId) {
+            // only adopt if cloud meta newer than local stamp
+            const cloudMetaAt = +u.updatedAt || 0;
+            const localMax = Math.max(0, ...(APP.trips.map(tripUpdatedAt)));
+            if (cloudMetaAt >= localMax) {
+              APP.activeTripId = u.activeTripId;
+              changed = true;
+            }
+          }
+        }
+        if (u.settings && typeof u.settings === 'object' && (+u.updatedAt || 0) > 0) {
+          APP.settings = Object.assign({}, APP.settings || {}, u.settings);
+        }
+      }
+    } catch (e) { console.warn('[cloud] user meta', e); }
+
+    if (!APP.trips.some(t => t.id === APP.activeTripId) && APP.trips[0]) {
+      APP.activeTripId = APP.trips[0].id;
+      changed = true;
+    }
+
+    store.set(APP_KEY, APP);
+
+    // Upload any local trips missing or newer than cloud
+    await pushLocalToCloud(true);
+  } finally {
+    cloudApplyingRemote = false;
+  }
+
+  if (changed) {
+    toast('已同雲端合併旅程');
+    // Soft refresh lists if home visible
+    try {
+      if (typeof renderHome === 'function') renderHome();
+      else if (location.hash !== '#trip') { /* stay */ }
+    } catch (e) {}
+  }
+}
+
+async function cloudDeleteTrip(id) {
+  if (!fbDb || !cloudUser || !id) return;
+  try {
+    await fbDb.collection('trips').doc(id).delete();
+  } catch (e) {
+    console.warn('[cloud] delete trip', e);
+  }
+}
+
+async function pushLocalToCloud(fromMerge) {
+  if (!fbDb || !cloudUser || cloudSyncing) return;
+  cloudSyncing = true;
+  if (!fromMerge) cloudSetStatus('上載中…');
+  try {
+    const uid = cloudUser.uid;
+    const now = Date.now();
+    const batchLimit = 400;
+    let batch = fbDb.batch();
+    let n = 0;
+    const commitBatch = async () => {
+      if (n === 0) return;
+      await batch.commit();
+      batch = fbDb.batch();
+      n = 0;
+    };
+
+    for (const t of (APP.trips || [])) {
+      if (!t.updatedAt) t.updatedAt = now;
+      const ownerUid = t.cloudOwnerUid || uid;
+      let memberUids = Array.isArray(t.memberUids) ? t.memberUids.slice() : [];
+      if (!memberUids.includes(ownerUid)) memberUids.unshift(ownerUid);
+      if (ownerUid === uid && !memberUids.includes(uid)) memberUids.push(uid);
+      // Ensure owner always in members for rules simplicity
+      memberUids = [...new Set(memberUids.filter(Boolean))];
+      t.cloudOwnerUid = ownerUid;
+      t.memberUids = memberUids;
+
+      const payload = {
+        ownerUid,
+        memberUids,
+        updatedAt: t.updatedAt || now,
+        trip: JSON.parse(JSON.stringify(t))
+      };
+      const ref = fbDb.collection('trips').doc(t.id);
+      batch.set(ref, payload, { merge: true });
+      n++;
+      if (n >= batchLimit) await commitBatch();
+    }
+
+    const uref = fbDb.collection('users').doc(uid);
+    batch.set(uref, {
+      email: cloudUser.email || '',
+      activeTripId: APP.activeTripId,
+      settings: APP.settings || {},
+      updatedAt: now,
+      tripIds: (APP.trips || []).map(t => t.id)
+    }, { merge: true });
+    n++;
+    await commitBatch();
+
+    store.set(APP_KEY, APP);
+    cloudSetStatus('已同步 ' + new Date().toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    if (!fromMerge) toast('已同步到雲端');
+  } catch (e) {
+    console.warn('[cloud] push fail', e);
+    const msg = (e && e.code === 'permission-denied')
+      ? '權限被拒：請喺 Firestore Rules 貼上仓库 firestore.rules'
+      : ('同步失敗：' + ((e && e.message) || '未知錯誤'));
+    cloudSetStatus(msg);
+    if (!fromMerge) toast(msg);
+    throw e;
+  } finally {
+    cloudSyncing = false;
+  }
+}
+
+async function cloudSignIn() {
+  const email = ($('cloudEmail') && $('cloudEmail').value || '').trim();
+  const pass = ($('cloudPass') && $('cloudPass').value) || '';
+  if (!email || !pass) { toast('請填電郵同密碼'); return; }
+  try {
+    await fbAuth.signInWithEmailAndPassword(email, pass);
+    toast('登入成功');
+  } catch (e) { toast(cloudAuthError(e)); }
+}
+async function cloudSignUp() {
+  const email = ($('cloudEmail') && $('cloudEmail').value || '').trim();
+  const pass = ($('cloudPass') && $('cloudPass').value) || '';
+  if (!email || !pass) { toast('請填電郵同密碼'); return; }
+  if (pass.length < 6) { toast('密碼至少 6 個字元'); return; }
+  try {
+    await fbAuth.createUserWithEmailAndPassword(email, pass);
+    toast('註冊成功，已登入');
+  } catch (e) { toast(cloudAuthError(e)); }
+}
+async function cloudGoogle() {
+  try {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    await fbAuth.signInWithPopup(provider);
+    toast('Google 登入成功');
+  } catch (e) { toast(cloudAuthError(e)); }
+}
+async function cloudSignOut() {
+  try {
+    if (cloudSyncTimer) clearTimeout(cloudSyncTimer);
+    await fbAuth.signOut();
+    toast('已登出（本機資料仍保留）');
+  } catch (e) { toast('登出失敗'); }
+}
+
+function wireCloudUI() {
+  if ($('btnCloudSignIn')) $('btnCloudSignIn').onclick = () => cloudSignIn();
+  if ($('btnCloudSignUp')) $('btnCloudSignUp').onclick = () => cloudSignUp();
+  if ($('btnCloudGoogle')) $('btnCloudGoogle').onclick = () => cloudGoogle();
+  if ($('btnCloudSignOut')) $('btnCloudSignOut').onclick = () => cloudSignOut();
+  if ($('btnCloudSyncNow')) $('btnCloudSyncNow').onclick = () => {
+    if (!cloudUser) { toast('請先登入'); return; }
+    stampTripsNow();
+    store.set(APP_KEY, APP);
+    pushLocalToCloud().catch(() => {});
+  };
+  renderCloudAccountUI();
+}
+
+wireCloudUI();
+initFirebase();
 
 
 /* ---------- Station 6: PWA service worker ---------- */

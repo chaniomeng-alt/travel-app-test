@@ -1,5 +1,5 @@
 /* Station 6 — service worker（GitHub Pages 子路徑，全部用相對路徑） */
-const CACHE_VERSION = 'v6-5-card-mobile';
+const CACHE_VERSION = 'v6-6-firebase-cloud';
 const CACHE_NAME = 'travel-app-' + CACHE_VERSION;
 const SHELL_URLS = [
   './index.html',
@@ -86,6 +86,10 @@ function shouldBypass(url) {
   if (host.includes('google.com') || host.includes('googleapis.com') || host.includes('gstatic.com')) return true;
   if (host.includes('maps.google')) return true;
   if (host.includes('jsdelivr.net')) return true;
+  /* Firebase Auth / Firestore / CDN — always network, never Cache Storage */
+  if (host.includes('firebaseio.com') || host.includes('firestore.googleapis.com')) return true;
+  if (host.includes('firebaseapp.com') || host.includes('googleapis.com')) return true;
+  if (host.includes('identitytoolkit.googleapis.com') || host.includes('securetoken.googleapis.com')) return true;
   return false;
 }
 
