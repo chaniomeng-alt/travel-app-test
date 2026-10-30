@@ -1268,7 +1268,7 @@ function renderCdFoot() {
   const d = pd(trip.startDate);
   const tm = normDepartTime(trip.departTime);
   const timeBit = tm ? `<span class="ft-time">${tm}</span>` : '';
-  $('cdFoot').innerHTML = `<span class="ft-lab">出發</span><b>${d.getFullYear()}</b><i>年</i><b>${d.getMonth() + 1}</b><i>月</i><b>${d.getDate()}</b><i>日</i>${timeBit}<span class="ft-dow">週${'日一二三四五六'[d.getDay()]}</span>`;
+  $('cdFoot').innerHTML = `<span class="ft-lab">出發</span><span class="ft-num">${d.getFullYear()}</span><span class="ft-u">年</span><span class="ft-num">${d.getMonth() + 1}</span><span class="ft-u">月</span><span class="ft-num">${d.getDate()}</span><span class="ft-u">日</span>${timeBit}<span class="ft-dow">週${'日一二三四五六'[d.getDay()]}</span>`;
   document.title = `${trip.title}｜${trip.startDate.slice(5).replace('-', '/')}–${trip.endDate.slice(5).replace('-', '/')}`;
 }
 renderCdFoot();
