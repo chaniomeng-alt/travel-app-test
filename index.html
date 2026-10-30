@@ -163,59 +163,56 @@
     <div class="card" id="expList"></div>
   </section>
 
-  <section class="view" id="v-list">
+  <section class="view" id="v-shop">
+    <div class="bud-head" style="margin-bottom:12px">
+      <div><h1 class="page">購物清單</h1><div class="page-sub" style="margin:0">記錄想買的東西</div></div>
+      <div class="sticker bob" style="width:96px;height:96px;flex:none" id="stk-shop"></div>
+      <button class="btn" id="spToggle">＋ 新增</button>
+    </div>
+    <div class="stats" style="margin-bottom:12px">
+      <div class="card stat"><div><div class="num" id="spTodo">0</div><div class="lab">待購買</div></div><div id="pgirl" class="sticker fig"></div></div>
+      <div class="card stat"><div><div class="num" id="spDone">0</div><div class="lab">已購買</div></div><div id="pboy" class="sticker fig"></div></div>
+    </div>
+    <div class="card" id="spPanel" hidden>
+      <div class="form-grid">
+        <input class="fld" id="spName" placeholder="想買咩？" maxlength="40">
+        <input class="fld" id="spNote" placeholder="備註／邊度買" maxlength="40" style="grid-column:1/-1">
+        <select class="fld" id="spCat"></select>
+        <select class="fld" id="spPri"><option value="0">一般</option><option value="1">重要</option><option value="2">必買</option></select>
+      </div>
+      <div class="photo-pick"><label for="spImg">📷 加相</label><input type="file" id="spImg" accept="image/*" hidden><img id="spPrev" alt="" hidden><span id="spImgNote">可選</span></div>
+      <button class="btn" id="spAdd" style="width:100%;margin-top:14px">加入清單</button>
+    </div>
+    <div class="sh-head"><b>待購買</b><select class="fld" id="spFilter" style="padding:6px 10px;border-radius:14px;font-size:.88rem"></select></div>
+    <div id="spList"></div>
+    <div class="sh-head" style="margin-top:26px"><b>已購買</b></div>
+    <div id="spDoneList"></div>
+  </section>
+
+  <section class="view" id="v-todo">
     <div class="page-head">
-      <h1 class="page">清單</h1>
-      <div class="page-sub">購物同出發前準備</div>
-      <div class="sticker bob" style="width:96px;height:96px;top:-8px;" id="stk-list"></div>
+      <h1 class="page">出發前準備</h1>
+      <div class="page-sub">一項一項打剔</div>
+      <div class="sticker bob" style="width:96px;height:96px;top:-8px;" id="stk-todo"></div>
     </div>
-    <div class="tabs" id="listTabs">
-      <button class="tab on" data-list="shop">購物清單</button>
-      <button class="tab" data-list="todo">待辦</button>
-    </div>
-    <div id="listShop">
-      <div class="bud-head" style="margin-bottom:12px">
-        <div class="stats" style="flex:1;margin:0">
-          <div class="card stat"><div><div class="num" id="spTodo">0</div><div class="lab">待購買</div></div><div id="pgirl" class="sticker fig"></div></div>
-          <div class="card stat"><div><div class="num" id="spDone">0</div><div class="lab">已購買</div></div><div id="pboy" class="sticker fig"></div></div>
-        </div>
-        <button class="btn" id="spToggle">＋ 新增</button>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;font-weight:700;margin-bottom:8px;gap:8px;flex-wrap:wrap">
+        <span>完成進度</span><span id="todoPct" style="color:var(--pri)">0%</span>
+        <button class="ghost sm" id="todoDefaults">套用預設清單</button>
       </div>
-      <div class="card" id="spPanel" hidden>
-        <div class="form-grid">
-          <input class="fld" id="spName" placeholder="想買咩？" maxlength="40">
-          <input class="fld" id="spNote" placeholder="備註／邊度買" maxlength="40" style="grid-column:1/-1">
-          <select class="fld" id="spCat"></select>
-          <select class="fld" id="spPri"><option value="0">一般</option><option value="1">重要</option><option value="2">必買</option></select>
-        </div>
-        <div class="photo-pick"><label for="spImg">📷 加相</label><input type="file" id="spImg" accept="image/*" hidden><img id="spPrev" alt="" hidden><span id="spImgNote">可選</span></div>
-        <button class="btn" id="spAdd" style="width:100%;margin-top:14px">加入清單</button>
-      </div>
-      <div class="sh-head"><b>待購買</b><select class="fld" id="spFilter" style="padding:6px 10px;border-radius:14px;font-size:.88rem"></select></div>
-      <div id="spList"></div>
-      <div class="sh-head" style="margin-top:26px"><b>已購買</b></div>
-      <div id="spDoneList"></div>
-    </div>
-    <div id="listTodo" hidden>
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;font-weight:700;margin-bottom:8px;gap:8px;flex-wrap:wrap">
-          <span>完成進度</span><span id="todoPct" style="color:var(--pri)">0%</span>
-          <button class="ghost sm" id="todoDefaults">套用預設清單</button>
-        </div>
-        <div class="track" style="margin:0 0 10px"><div class="bar" id="todoBar"></div></div>
-        <div id="todoList"></div>
-        <div class="add-row"><select class="fld" id="todoGroup" style="flex:none;width:110px"><option value="pre">出發前</option><option value="visa">簽證</option><option value="insurance">保險</option></select><input id="todoNew" class="fld" placeholder="新增自訂項目…" maxlength="40" style="flex:1"><button class="btn" id="todoAdd">新增</button></div>
-      </div>
+      <div class="track" style="margin:0 0 10px"><div class="bar" id="todoBar"></div></div>
+      <div id="todoList"></div>
+      <div class="add-row"><select class="fld" id="todoGroup" style="flex:none;width:110px"><option value="pre">出發前</option><option value="visa">簽證</option><option value="insurance">保險</option></select><input id="todoNew" class="fld" placeholder="新增自訂項目…" maxlength="40" style="flex:1"><button class="btn" id="todoAdd">新增</button></div>
     </div>
   </section>
 
   <section class="view" id="v-weather">
     <div class="page-head">
       <h1 class="page">天氣參考</h1>
-      <div class="page-sub" id="wxSub">以目的地查預報</div>
+      <div class="page-sub" id="wxSub">有預報用預報；未有就顯示季節參考</div>
     </div>
     <div class="wgrid" id="wxGrid"></div>
-    <p class="hint" id="wxHint">資料來自 Open-Meteo</p>
+    <p class="hint" id="wxHint">資料來自 Open-Meteo；標「季節參考」唔係即時預報</p>
   </section>
 
   <section class="view" id="v-set">
@@ -256,7 +253,8 @@
   <button data-v="v-trip" class="active"><svg class="ic" viewBox="0 0 24 24" data-i="cal"></svg>行程</button>
   <button data-v="v-book"><svg class="ic" viewBox="0 0 24 24" data-i="ticket"></svg>預約</button>
   <button data-v="v-budget"><svg class="ic" viewBox="0 0 24 24" data-i="wallet"></svg>預算</button>
-  <button data-v="v-list"><svg class="ic" viewBox="0 0 24 24" data-i="bag"></svg>清單</button>
+  <button data-v="v-shop"><svg class="ic" viewBox="0 0 24 24" data-i="bag"></svg>購物</button>
+  <button data-v="v-todo"><svg class="ic" viewBox="0 0 24 24" data-i="check"></svg>準備</button>
   <button data-v="v-weather"><svg class="ic" viewBox="0 0 24 24" data-i="cloud"></svg>天氣</button>
   <button data-v="v-set"><svg class="ic" viewBox="0 0 24 24" data-i="gear"></svg>設定</button>
 </nav>
