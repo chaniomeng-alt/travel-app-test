@@ -633,10 +633,34 @@ function persist(opts) {
   } catch (e) {}
   return ok;
 }
+function sortTripsByStartDate(trips) {
+  /* Home list + sync: always 出發日期 ascending (then title, id). Never rely on Firestore/Map push order. */
+  const list = Array.isArray(trips) ? trips.slice() : [];
+  list.sort((a, b) => {
+    const sa = String((a && a.startDate) || '');
+    const sb = String((b && b.startDate) || '');
+    if (sa !== sb) return sa < sb ? -1 : 1;
+    const ta = String((a && a.title) || '');
+    const tb = String((b && b.title) || '');
+    if (ta !== tb) return ta < tb ? -1 : 1;
+    return String((a && a.id) || '').localeCompare(String((b && b.id) || ''));
+  });
+  return list;
+}
+function normalizeTripOrder() {
+  if (!APP || !Array.isArray(APP.trips) || APP.trips.length < 2) return false;
+  const before = APP.trips.map(t => t && t.id).join('\0');
+  const next = sortTripsByStartDate(APP.trips);
+  const after = next.map(t => t && t.id).join('\0');
+  if (before === after) return false;
+  APP.trips = next;
+  return true;
+}
 function loadApp() {
   const a = store.get(APP_KEY, null);
   if (a && a.version === 1 && Array.isArray(a.trips) && a.trips.length) {
     a.trips.forEach(t => (t.days || []).forEach(d => d.items = (d.items || []).map(normItem)));
+    a.trips = sortTripsByStartDate(a.trips);
     if (!a.trips.some(t => t.id === a.activeTripId)) a.activeTripId = a.trips[0].id;
     a.settings = a.settings || {};
     return a;
@@ -658,6 +682,7 @@ ensureSeed();
     }
   } catch (e) {}
 })();
+
 function getTrip(id) { return APP.trips.find(t => t.id === (id || APP.activeTripId)) || APP.trips[0]; }
 function saveTrip(t) {
   if (t) {
@@ -919,6 +944,9 @@ const coverCSS = c => !c ? `background:${COVERS[0]}` : c.startsWith('#') ? `back
 function renderHome() {
   const L = document.getElementById('tripList'); L.innerHTML = '';
   const today = isoDate(new Date());
+  if (normalizeTripOrder()) {
+    try { store.set(APP_KEY, APP); } catch (e) {}
+  }
   APP.trips.forEach(t => {
     const st = tripStatus(t), n = daysBetween(t.startDate, t.endDate);
     let extra = '';
@@ -2734,7 +2762,8 @@ async function syncWithCloud() {
       }
       kept.push(t); /* never uploaded yet — keep for upload */
     }
-    APP.trips = kept;
+    APP.trips = sortTripsByStartDate(kept);
+    if (APP.trips.map(t => t && t.id).join('\0') !== kept.map(t => t && t.id).join('\0')) changed = true;
 
     /* Meta: NEVER overwrite local activeTripId here — that bounced Bangkok → Kyushu after enterTrip reload
        when cloud user doc still had the older trip. Only forcePullFromCloud may adopt cloud activeTripId.
@@ -2786,7 +2815,7 @@ async function forcePullFromCloud() {
       toast('雲端未有旅程');
       return;
     }
-    APP.trips = next;
+    APP.trips = sortTripsByStartDate(next);
     try {
       const uref = await fbDb.collection('users').doc(uid).get();
       if (uref.exists) {
