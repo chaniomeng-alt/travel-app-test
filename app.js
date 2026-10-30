@@ -1305,6 +1305,58 @@ function bookingStoragePath(tripId, bookingId, fileId) {
 function bookingFilesCol(tripId) {
   return fbDb.collection('trips').doc(tripId).collection('files');
 }
+/** 預約 fileId 斷咗但 trips/{id}/files 仲喺 → 接返連結（唔會刪雲端圖） */
+async function relinkBookingFilesFromCloud(t) {
+  if (!fbDb || !cloudUser || !t || !t.id) return false;
+  let changed = false;
+  const lists = [];
+  if (t.bookings) {
+    if (Array.isArray(t.bookings.flights)) lists.push(t.bookings.flights);
+    if (Array.isArray(t.bookings.stays)) lists.push(t.bookings.stays);
+  }
+  for (const list of lists) {
+    for (const b of list) {
+      if (!b || !b.id) continue;
+      if (b.fileId) continue;
+      const fid = b.id + '_file';
+      try {
+        const snap = await bookingFilesCol(t.id).doc(fid).get();
+        if (!snap.exists) continue;
+        const d = snap.data() || {};
+        b.fileId = fid;
+        b.fileName = d.name || (b.fileName || 'booking.jpg');
+        b.fileMime = d.mime || 'image/jpeg';
+        b.fileSize = d.size || 0;
+        b.fileFsSynced = true;
+        b.fileCloudAt = Date.now();
+        changed = true;
+      } catch (e) { console.warn('[cloud] relink file', t.id, fid, e); }
+    }
+  }
+  return changed;
+}
+/** 上載前：本機冇 fileId 就保留雲端已有嘅附件欄，避免覆蓋斷線 */
+function preserveCloudBookingFiles(localTrip, cloudTrip) {
+  if (!localTrip || !cloudTrip || !cloudTrip.bookings) return;
+  const map = new Map();
+  (cloudTrip.bookings.flights || []).forEach(x => { if (x && x.id) map.set(x.id, x); });
+  (cloudTrip.bookings.stays || []).forEach(x => { if (x && x.id) map.set(x.id, x); });
+  const apply = (b) => {
+    if (!b || !b.id || b.fileId) return;
+    const c = map.get(b.id);
+    if (!c || !c.fileId) return;
+    b.fileId = c.fileId;
+    b.fileName = c.fileName || b.fileName || '';
+    b.fileMime = c.fileMime || b.fileMime || '';
+    b.fileSize = c.fileSize || b.fileSize || 0;
+    b.fileFsSynced = !!c.fileFsSynced;
+    b.fileCloudAt = c.fileCloudAt || b.fileCloudAt || 0;
+    b.fileStoragePath = c.fileStoragePath || b.fileStoragePath || '';
+    b.fileDownloadURL = c.fileDownloadURL || b.fileDownloadURL || '';
+  };
+  (localTrip.bookings && localTrip.bookings.flights || []).forEach(apply);
+  (localTrip.bookings && localTrip.bookings.stays || []).forEach(apply);
+}
 function blobToRawBase64(blob) {
   return new Promise((res, rej) => {
     const r = new FileReader();
@@ -3824,6 +3876,18 @@ async function syncWithCloud() {
 
     store.set(APP_KEY, APP);
 
+    /* 接返斷咗嘅預約圖連結（files 子集合仲喺） */
+    try {
+      let relinked = false;
+      for (const t of (APP.trips || [])) {
+        if (await relinkBookingFilesFromCloud(t)) relinked = true;
+      }
+      if (relinked) {
+        changed = true;
+        store.set(APP_KEY, APP);
+      }
+    } catch (e) { console.warn('[cloud] relink', e); }
+
     await pushLocalToCloud(true, cloudMap);
   } finally {
     cloudApplyingRemote = false;
@@ -3929,6 +3993,8 @@ async function pushLocalToCloud(fromMerge, prefetchedCloudMap, forceUpload) {
         }
       }
 
+      const existingTrip = existing && existing.trip;
+      preserveCloudBookingFiles(t, existingTrip);
       const payload = {
         ownerUid,
         memberUids,
