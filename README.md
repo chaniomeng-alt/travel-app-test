@@ -35,6 +35,7 @@ travel-app-test/
 ├── manifest.webmanifest    # PWA 安裝資訊
 ├── index-v1-backup.html    # 拆檔前嘅單檔備份（唔好改）
 ├── travel-backup-20261030.json  # 示範備份（九州＋曼谷；無預約編號）
+├── firestore.rules         # Firestore 保安規則（要手動貼去 Console）
 ├── README.md               # 呢份說明
 ├── .github/workflows/      # Actions：解碼 assets 用
 └── assets/
@@ -126,7 +127,7 @@ Pages 已經開咗：Settings → Pages → 用 **main** 分支、**根目錄（
 | **天氣預報範圍** | Open-Meteo 通常只覆蓋未來約 1～2 星期；超出範圍會顯示「未有預報」，唔會造假數字。 |
 | **公開倉庫＝行程公開** | 航班、酒店可以放示範資料，但**預約確認編號／PNR 唔好寫入公開程式碼**；私人編號只存你手機（或自己嘅備份檔，唔好 commit 上 GitHub）。 |
 | **匯率／外部 API** | 依賴第三方；失敗時可手動改匯率。條款同額度可能變。 |
-| **第 8a 站（本機成員）已做** | 底欄「成員」：頭像／名稱／角色、增刪改、預約分攤勾選、記帳付款人、簡易結算。**8b 雲端同步未做**。 |
+| **第 8a／8b** | 本機成員已做。**8b Firebase 雲端**：設定→雲端帳號可電郵註冊／登入（同 Google）；登入後旅程文字資料同步 Firestore。附件仍本機。外人冇登入權限見唔到你嘅行程。 |
 
 ---
 
@@ -170,6 +171,34 @@ Pages 已經開咗：Settings → Pages → 用 **main** 分支、**根目錄（
 
 ---
 
+
+## Firebase 雲端同步（第 8b 站）
+
+專案：`my-journey-d5690`。前端用 Firebase JS SDK（CDN compat），資料寫入 Firestore：
+
+- `users/{uid}`：電郵、activeTripId、settings、tripIds  
+- `trips/{tripId}`：`ownerUid`、`memberUids`、`updatedAt`、完整 `trip` 物件  
+
+本機 `localStorage`（`travel_app_v1`）仍然係主資料；離線可繼續用。登入後會**合併**雲端同本機（按 `updatedAt`，唔會一登入就清空本機）。改行程約 1.5 秒後自動上載。
+
+### 你要喺 Firebase Console 確認／完成嘅步驟
+
+1. **Authentication** → 開啟 **Email/Password**（建議同時開 **Google**）。  
+2. **Authentication → Settings → Authorized domains** → 加入：  
+   `chaniomeng-alt.github.io`  
+   （本機測試可加 `localhost`。）  
+3. **Firestore → Rules** → 將倉庫根目錄 [`firestore.rules`](./firestore.rules) **成份貼上** → Publish。  
+   （呢個 bot 冇 Firebase CLI 登入，**唔能代你 deploy rules**；測試模式規則唔適合長期用。）  
+4. 用正式網址開 App → **設定 → 雲端帳號** → 註冊／登入 → 改一啲行程 → 撳「立即同步」或等自動同步。  
+5. 換另一部裝置／瀏覽器，同一個帳登入，應會見返旅程（附件 PDF／相暫時唔跟雲端）。
+
+### 安全說明
+
+- `apiKey` 本來就會出現喺前端，靠 **登入 + Firestore Rules** 保護資料。  
+- 公開 GitHub Pages 只係 App 殼；**未授權使用者讀唔到**你嘅 `trips`。  
+- 已登入同伴若有 `memberUids` 權限，仍可睇／匯出自己畫面見到嘅資料（瀏覽器本質）。
+
+---
 ## 路線圖進度（簡要）
 
 | 站 | 內容 | 狀態 |
@@ -178,6 +207,6 @@ Pages 已經開咗：Settings → Pages → 用 **main** 分支、**根目錄（
 | 6 | PWA | 已完成 |
 | 7 | 上線＋呢份 README | 已完成（Pages 已開） |
 | 8a | 本機成員分頁 | 完成 |
-| 8b | 雲端同步（選做） | 未開始 |
+| 8b | Firebase Auth + Firestore 同步（首輪） | 完成（邀請同伴稍後） |
 
 有問題可以喺 GitHub Issues 開，或者將錯誤訊息／截圖貼畀 AI 幫手。
