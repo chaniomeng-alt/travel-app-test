@@ -1,0 +1,40 @@
+name: Decode binary assets
+on:
+  push:
+    paths:
+      - 'assets/_b64/**'
+      - '.github/workflows/decode-assets.yml'
+  workflow_dispatch:
+jobs:
+  decode:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Decode .b64 into PNG
+        run: |
+          set -e
+          shopt -s nullglob globstar
+          count=0
+          for f in assets/_b64/**/*.b64; do
+            rel="${f#assets/_b64/}"
+            out="assets/${rel%.b64}"
+            mkdir -p "$(dirname "$out")"
+            base64 -d "$f" > "$out"
+            echo "decoded $f -> $out ($(wc -c < "$out") bytes)"
+            count=$((count+1))
+          done
+          echo "decoded_count=$count"
+          test "$count" -gt 0
+      - name: Commit decoded PNGs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/covers assets/stickers
+          if git diff --staged --quiet; then
+            echo "No PNG changes"
+          else
+            git commit -m "Add decoded cover and sticker PNGs"
+            git push
+          fi

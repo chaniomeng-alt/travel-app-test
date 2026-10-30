@@ -424,6 +424,22 @@ window.TripStore = { getTrip, saveTrip, createTrip, deleteTrip, setActiveTrip, t
    To swap in designer PNGs: set src, e.g. { name:'招財貓', src:'assets/stickers/maneki.png' }.
    Without src the built-in SVG drawing is used. */
 const STICKERS = {
+  /* designer PNG stickers (v4) — src preferred over canvas drawings */
+  jp01: { name: '啡虎斑', src: 'assets/stickers/sticker-jp-01.png' },
+  jp02: { name: '粉花', src: 'assets/stickers/sticker-jp-02.png' },
+  jp03: { name: '黑貓', src: 'assets/stickers/sticker-jp-03.png' },
+  jp04: { name: '三花', src: 'assets/stickers/sticker-jp-04.png' },
+  jp05: { name: '灰英短', src: 'assets/stickers/sticker-jp-05.png' },
+  jp06: { name: '橘貓', src: 'assets/stickers/sticker-jp-06.png' },
+  jp07: { name: '白長毛', src: 'assets/stickers/sticker-jp-07.png' },
+  jp08: { name: '暹羅', src: 'assets/stickers/sticker-jp-08.png' },
+  th01: { name: '茉莉花環貓', src: 'assets/stickers/sticker-th-01.png' },
+  th02: { name: '佛寺蓮花貓', src: 'assets/stickers/sticker-th-02.png' },
+  th03: { name: '嘟嘟車貓', src: 'assets/stickers/sticker-th-03.png' },
+  th04: { name: '芒果糯米飯貓', src: 'assets/stickers/sticker-th-04.png' },
+  th05: { name: '潑水節貓', src: 'assets/stickers/sticker-th-05.png' },
+  th06: { name: '雞蛋花象墜貓', src: 'assets/stickers/sticker-th-06.png' },
+  /* legacy canvas keys kept so old placements still render */
   maneki: { name: '招財貓' }, sakura: { name: '櫻花貓' }, ramen: { name: '拉麵貓' }, bowl: { name: '碗貓' },
   shop: { name: '購物貓' }, bags: { name: '手袋貓' }, girl: { name: '女仔' }
 };
