@@ -336,14 +336,16 @@ function migrateTripSettings() {
           theme: g.theme != null ? g.theme : 6,
           fs: g.fs != null ? g.fs : 16,
           fx: g.fx != null ? g.fx : 'leaf',
-          dark: !!g.dark
+          dark: !!g.dark,
+          hideStickers: false
         };
       } else {
         t.settings = {
           theme: g.theme != null ? g.theme : 6,
           fs: g.fs != null ? g.fs : 16,
           fx: g.fx != null ? g.fx : 'none',
-          dark: !!g.dark
+          dark: !!g.dark,
+          hideStickers: false
         };
       }
       changed = true;
@@ -352,6 +354,7 @@ function migrateTripSettings() {
       if (t.settings.fs == null) { t.settings.fs = g.fs ?? 16; changed = true; }
       if (t.settings.fx == null) { t.settings.fx = isBangkokTrip(t) ? 'none' : (g.fx ?? 'leaf'); changed = true; }
       if (t.settings.dark == null) { t.settings.dark = !!g.dark; changed = true; }
+      if (t.settings.hideStickers == null) { t.settings.hideStickers = false; changed = true; }
     }
   });
   return changed;
@@ -403,9 +406,9 @@ function toDays(src, start) {
 }
 function defaultTripSettings(kind) {
   /* kind: 'bangkok' | 'kyushu' | 'new' */
-  if (kind === 'bangkok') return { theme: 2, fs: 16, fx: 'none', dark: false }; /* 綠 + 無特效 */
-  if (kind === 'kyushu') return { theme: 6, fs: 16, fx: 'leaf', dark: false }; /* 楓葉紅 + 秋葉（沿用原預設） */
-  return { theme: 6, fs: 16, fx: 'none', dark: false };
+  if (kind === 'bangkok') return { theme: 2, fs: 16, fx: 'none', dark: false, hideStickers: false }; /* 綠 + 無特效 */
+  if (kind === 'kyushu') return { theme: 6, fs: 16, fx: 'leaf', dark: false, hideStickers: false }; /* 楓葉紅 + 秋葉（沿用原預設） */
+  return { theme: 6, fs: 16, fx: 'none', dark: false, hideStickers: false };
 }
 function isBangkokTrip(t) {
   if (!t) return false;
@@ -447,7 +450,7 @@ function migrate() {
     budget: { total: +old('kz_budget') || 0, rate: +old('kz_rate') || 0.052, expenses: Array.isArray(exps) ? exps : [] },
     shop: Array.isArray(shop) ? shop : KZ_DEFAULT_SHOP.map(x => Object.assign({}, x)),
     todos: Array.isArray(todos) ? todos : KZ_DEFAULT_TODOS.map(x => Object.assign({}, x)),
-    members: [], settings: { theme: settings.theme, fs: settings.fs, fx: settings.fx, dark: false }, _kind: 'kyushu', _noAdd: true
+    members: [], settings: { theme: settings.theme, fs: settings.fs, fx: settings.fx, dark: false, hideStickers: false }, _kind: 'kyushu', _noAdd: true
   });
   const tThai = buildThailandTrip();
   return { version: 1, seedVersion: SEED_VER, activeTripId: 't1', settings, trips: [t1, tThai] };
@@ -558,39 +561,77 @@ const STICKERS = {
   shop: { name: '購物貓' }, bags: { name: '手袋貓' }, girl: { name: '女仔' }
 };
 const stkHTML = k => { const a = STICKERS[k] || {}; return a.src ? `<img src="${a.src}" alt="${a.name || k}" draggable="false">` : cat(k); };
+function stkApplyTransform(el, xPct, yPx, r, layerW) {
+  const px = (xPct / 100) * layerW;
+  el.style.transform = `translate3d(${px}px, ${yPx}px, 0) rotate(${r || 0}deg)`;
+}
 function renderStickers(d) {
   const layer = document.getElementById('stkLayer'); if (!layer) return;
   d.stickers = d.stickers || [];
   layer.innerHTML = '';
+  if (getSetting('hideStickers', false)) {
+    layer.hidden = true;
+    return;
+  }
+  layer.hidden = false;
+  const layerW = () => Math.max(1, layer.clientWidth);
   d.stickers.forEach((s, idx) => {
     const el = document.createElement('div');
     el.className = 'placed sticker';
-    el.style.left = s.x + '%'; el.style.top = s.y + 'px'; el.style.transform = `rotate(${s.r || 0}deg)`;
-    el.innerHTML = stkHTML(s.k) + '<button class="x" aria-label="刪除貼紙">×</button>';
+    el.innerHTML = stkHTML(s.k) + '<button type="button" class="x" aria-label="刪除貼紙">×</button>';
+    stkApplyTransform(el, s.x, s.y, s.r, layerW());
     el.querySelector('.x').onpointerdown = e => e.stopPropagation();
     el.querySelector('.x').onclick = e => { e.stopPropagation(); d.stickers.splice(idx, 1); saveDays(); renderStickers(d); };
-    let sx, sy, ox, oy, moved = false, lastTap = 0;
+    let sx, sy, ox, oy, curX, curY, moved = false, lastTap = 0, pid = null;
+    const endDrag = e => {
+      if (sx === undefined) return;
+      if (e && pid != null && e.pointerId != null && e.pointerId !== pid) return;
+      el.classList.remove('dragging');
+      const wasMoved = moved;
+      sx = undefined; pid = null;
+      if (wasMoved) {
+        const W = layerW();
+        s.x = curX / W * 100;
+        s.y = curY;
+        stkApplyTransform(el, s.x, s.y, s.r, W);
+        saveDays();
+        return;
+      }
+      const now = Date.now();
+      if (now - lastTap < 320) {
+        s.r = ((s.r || 0) + 45) % 360;
+        stkApplyTransform(el, s.x, s.y, s.r, layerW());
+        saveDays();
+        lastTap = 0;
+      } else lastTap = now;
+    };
     el.onpointerdown = e => {
-      e.preventDefault(); el.setPointerCapture(e.pointerId);
+      if (e.button != null && e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      try { el.setPointerCapture(e.pointerId); } catch (_) {}
+      pid = e.pointerId;
       layer.querySelectorAll('.placed.sel').forEach(p => p !== el && p.classList.remove('sel'));
       el.classList.add('sel', 'dragging');
-      sx = e.clientX; sy = e.clientY; ox = el.offsetLeft; oy = el.offsetTop; moved = false;
+      sx = e.clientX; sy = e.clientY;
+      const W = layerW();
+      ox = (s.x / 100) * W; oy = s.y;
+      curX = ox; curY = oy;
+      moved = false;
     };
     el.onpointermove = e => {
-      if (sx === undefined) return;
+      if (sx === undefined || (pid != null && e.pointerId !== pid)) return;
+      e.preventDefault();
       const dx = e.clientX - sx, dy = e.clientY - sy;
       if (Math.abs(dx) + Math.abs(dy) > 4) moved = true;
-      const W = layer.clientWidth, H = layer.clientHeight;
-      el.style.left = Math.max(0, Math.min(W - el.offsetWidth, ox + dx)) / W * 100 + '%';
-      el.style.top = Math.max(0, Math.min(H - el.offsetHeight, oy + dy)) + 'px';
+      const W = layerW(), H = Math.max(1, layer.clientHeight);
+      curX = Math.max(0, Math.min(W - el.offsetWidth, ox + dx));
+      curY = Math.max(0, Math.min(H - el.offsetHeight, oy + dy));
+      el.style.transform = `translate3d(${curX}px, ${curY}px, 0) rotate(${s.r || 0}deg)`;
     };
-    el.onpointerup = () => {
-      el.classList.remove('dragging'); sx = undefined;
-      if (moved) { s.x = parseFloat(el.style.left); s.y = parseFloat(el.style.top); saveDays(); return; }
-      const now = Date.now();
-      if (now - lastTap < 320) { s.r = ((s.r || 0) + 360 + 45); el.style.transform = `rotate(${s.r}deg)`; s.r %= 360; saveDays(); lastTap = 0; }
-      else lastTap = now;
-    };
+    el.onpointerup = endDrag;
+    el.onpointercancel = endDrag;
+    el.onlostpointercapture = endDrag;
     layer.appendChild(el);
   });
 }
@@ -1678,6 +1719,23 @@ function applyDark(on) {
 }
 $('darkTog').onclick = () => applyDark($('darkTog').getAttribute('aria-pressed') !== 'true');
 applyDark(!!getSetting('dark', false));
+
+function applyHideStickers(on) {
+  document.body.classList.toggle('hide-stickers', !!on);
+  const tog = $('hideStkTog');
+  if (tog) {
+    tog.setAttribute('aria-pressed', on ? 'true' : 'false');
+    tog.classList.toggle('on', !!on);
+  }
+  setSetting('hideStickers', !!on);
+  if (typeof days !== 'undefined' && days[currentDay] && document.getElementById('stkLayer')) {
+    renderStickers(days[currentDay]);
+  }
+}
+if ($('hideStkTog')) {
+  $('hideStkTog').onclick = () => applyHideStickers($('hideStkTog').getAttribute('aria-pressed') !== 'true');
+  applyHideStickers(!!getSetting('hideStickers', false));
+}
 
 const FX = [['none','✕','無'],['sakura','🌸','櫻花'],['leaf','🍁','秋葉'],['snow','❄️','雪花']];
 const LEAF_COLORS = ['#E2762F','#C9442B','#E8A93A','#B0522A','#D98B2B'];
