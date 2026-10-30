@@ -280,7 +280,7 @@ const TH_DEFAULT_SHOP = [
 function buildThailandTrip() {
   return createTrip({
     id: 't-thai', title: '曼谷之旅', destination: '曼谷', startDate: '2026-12-24', endDate: '2026-12-27',
-    currency: 'THB', cover: 'assets/covers/bangkok.png?v=5',
+    currency: 'THB', cover: 'assets/covers/bangkok.png?v=6',
     bookings: JSON.parse(JSON.stringify(TH_BOOKINGS)),
     budget: { total: 0, rate: 0.22, expenses: [] },
     shop: TH_DEFAULT_SHOP.map(x => Object.assign({}, x)),
@@ -289,7 +289,7 @@ function buildThailandTrip() {
   });
 }
 const COVER_KYUSHU = 'assets/covers/kyushu.png?v=5';
-const COVER_BANGKOK = 'assets/covers/bangkok.png?v=5';
+const COVER_BANGKOK = 'assets/covers/bangkok.png?v=6';
 const SEED_VER = 8;
 
 function renameTripTitles() {
@@ -1124,14 +1124,34 @@ document.querySelectorAll('#nav button').forEach(b => b.onclick = () => {
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === b.dataset.v));
   window.scrollTo({ top: 0 });
 });
-/* page decorations — designer decor cats for budget/shop/prep; itinerary keeps jp stickers */
-const pageCat = (src, alt='') => `<img src="${src}" alt="${alt}" draggable="false">`;
-$('stk-top').innerHTML = `<div style="position:absolute;left:0;top:6px;width:64px;height:64px">${pageCat('assets/stickers/sticker-jp-02.png','粉花')}</div><div style="position:absolute;right:0;top:0;width:70px;height:70px">${pageCat('assets/stickers/sticker-jp-01.png','啡虎斑')}</div>`;
-const stkShop = $('stk-shop'); if (stkShop) stkShop.innerHTML = pageCat('assets/decor/deco-cat-shop.png','購物貓');
-const stkTodo = $('stk-todo'); if (stkTodo) stkTodo.innerHTML = pageCat('assets/decor/deco-cat-prep.png','準備貓');
-const pgirl = $('pgirl'); if (pgirl) pgirl.innerHTML = '<img src="assets/shop/shop-girl.png" alt="">';
-const pboy = $('pboy'); if (pboy) pboy.innerHTML = '<img src="assets/shop/shop-boy.png" alt="">';
-$('stk-bud').innerHTML = pageCat('assets/decor/deco-cat-budget.png','預算貓');
+/* page decorations — Kyushu: decor cats; Bangkok: dogs only (tabs 預算/購物/準備/預約) */
+const pageImg = (src, alt='') => `<img src="${src}" alt="${alt}" draggable="false">`;
+function applyPageDecor(t) {
+  const dogMode = isBangkokTrip(t);
+  const top = $('stk-top');
+  if (top) {
+    if (dogMode) {
+      top.innerHTML = `<div style="position:absolute;left:0;top:6px;width:64px;height:64px">${pageImg('assets/stickers/pets/sticker-dog-white-tan.png','白啡狗')}</div><div style="position:absolute;right:0;top:0;width:70px;height:70px">${pageImg('assets/stickers/pets/sticker-dog-chocolate.png','朱古力狗')}</div>`;
+    } else {
+      top.innerHTML = `<div style="position:absolute;left:0;top:6px;width:64px;height:64px">${pageImg('assets/stickers/sticker-jp-02.png','粉花')}</div><div style="position:absolute;right:0;top:0;width:70px;height:70px">${pageImg('assets/stickers/sticker-jp-01.png','啡虎斑')}</div>`;
+    }
+  }
+  const stkShop = $('stk-shop');
+  if (stkShop) stkShop.innerHTML = dogMode
+    ? pageImg('assets/stickers/sticker-dog-02.png','哥基')
+    : pageImg('assets/decor/deco-cat-shop.png','購物貓');
+  const stkTodo = $('stk-todo');
+  if (stkTodo) stkTodo.innerHTML = dogMode
+    ? pageImg('assets/stickers/pets/sticker-dog-chaimaru.png','柴丸')
+    : pageImg('assets/decor/deco-cat-prep.png','準備貓');
+  const stkBud = $('stk-bud');
+  if (stkBud) stkBud.innerHTML = dogMode
+    ? pageImg('assets/stickers/pets/sticker-dog-white-tan-pose2.png','白啡狗')
+    : pageImg('assets/decor/deco-cat-budget.png','預算貓');
+  const pgirl = $('pgirl'); if (pgirl) pgirl.innerHTML = '<img src="assets/shop/shop-girl.png" alt="">';
+  const pboy = $('pboy'); if (pboy) pboy.innerHTML = '<img src="assets/shop/shop-boy.png" alt="">';
+}
+applyPageDecor(typeof trip !== 'undefined' ? trip : getTrip());
 
 /* ---------- bookings CRUD (4b) ---------- */
 let bkKind = 'flight', bkEdit = null, bkPendingFile = null, bkFilter = 'all';
