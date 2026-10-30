@@ -486,7 +486,7 @@ function migrate() {
   return { version: 1, seedVersion: SEED_VER, activeTripId: 't1', settings, trips: [t1, tThai] };
 }
 let APP = null;
-function persist() { store.set(APP_KEY, APP); }
+function persist() { return store.set(APP_KEY, APP); }
 function loadApp() {
   const a = store.get(APP_KEY, null);
   if (a && a.version === 1 && Array.isArray(a.trips) && a.trips.length) {
