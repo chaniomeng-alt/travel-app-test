@@ -1,5 +1,5 @@
 /* Station 6 — service worker（GitHub Pages 子路徑，全部用相對路徑） */
-const CACHE_VERSION = 'v6-14-trip-order-by-start';
+const CACHE_VERSION = 'v6-15-kyushu-jp-cats';
 const CACHE_NAME = 'travel-app-' + CACHE_VERSION;
 const SHELL_URLS = [
   './index.html',
@@ -42,6 +42,10 @@ const SHELL_URLS = [
   './assets/stickers/sticker-jp-06.png',
   './assets/stickers/sticker-jp-07.png',
   './assets/stickers/sticker-jp-08.png',
+  './assets/stickers/sticker-maneki.png',
+  './assets/stickers/sticker-sakura.png',
+  './assets/stickers/sticker-ramen.png',
+  './assets/stickers/sticker-bowl.png',
   './assets/stickers/sticker-th-01.png',
   './assets/stickers/sticker-th-02.png',
   './assets/stickers/sticker-th-03.png',

@@ -766,7 +766,10 @@ const STICKERS = {
   petChoco2: { name: '朱古力狗趴', src: 'assets/stickers/pets/sticker-dog-chocolate-pose2.png' },
   petChaimaru: { name: '柴丸', src: 'assets/stickers/pets/sticker-dog-chaimaru.png' },
   /* legacy canvas keys kept so old placements still render */
-  maneki: { name: '招財貓' }, sakura: { name: '櫻花貓' }, ramen: { name: '拉麵貓' }, bowl: { name: '碗貓' },
+  maneki: { name: '招財貓', src: 'assets/stickers/sticker-maneki.png' },
+  sakura: { name: '櫻花貓', src: 'assets/stickers/sticker-sakura.png' },
+  ramen: { name: '拉麵貓', src: 'assets/stickers/sticker-ramen.png' },
+  bowl: { name: '碗貓', src: 'assets/stickers/sticker-bowl.png' },
   shop: { name: '購物貓' }, bags: { name: '手袋貓' }, girl: { name: '女仔' }
 };
 const stkHTML = k => { const a = STICKERS[k] || {}; return a.src ? `<img src="${a.src}" alt="${a.name || k}" draggable="false">` : cat(k); };
