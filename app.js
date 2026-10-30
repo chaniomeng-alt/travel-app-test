@@ -206,6 +206,11 @@ function normItem(it) {
   if (!TYPES.includes(o.type)) o.type = TYPE_OF_IC[o.ic] || 'sight';
   if (typeof o.note !== 'string') o.note = '';
   if (!(+o.cost >= 0)) o.cost = 0; else o.cost = +o.cost;
+  if (!(+o.ticket >= 0)) o.ticket = 0; else o.ticket = +o.ticket;
+  if (typeof o.hours !== 'string') o.hours = '';
+  if (typeof o.feat !== 'string') o.feat = '';
+  if (!o.remind) o.remind = 0;
+  if (!o.id) o.id = uid('a');
   return o;
 }
 function tripStatus(t, now) {
@@ -268,7 +273,7 @@ function migrate() {
   const old = k => store.get(k, undefined);
   const oldDays = old('kz_days');
   const exps = old('kz_exp');
-  const settings = { theme: old('kz_theme') ?? 6, fs: old('kz_fs') ?? 16, fx: old('kz_fx') ?? 'leaf' };
+  const settings = { theme: old('kz_theme') ?? 6, fs: old('kz_fs') ?? 16, fx: old('kz_fx') ?? 'leaf', dark: false, autoMerge: false };
   const shop = old('kz_shop2');
   const todos = old('kz_todos');
   const t1 = createTrip({
@@ -310,39 +315,6 @@ function setActiveTrip(id) { if (APP.trips.some(t => t.id === id)) { APP.activeT
 function getSetting(k, f) { return APP.settings[k] ?? f; }
 function setSetting(k, v) { APP.settings[k] = v; persist(); }
 window.TripStore = { getTrip, saveTrip, createTrip, deleteTrip, setActiveTrip, tripStatus, get app() { return APP; } };
-
-const trip = getTrip();
-let days = trip.days;
-
-/* ---------- bookings (from trip data) ---------- */
-(function renderBookings() {
-  const b = trip.bookings || { flights: [], stays: [] };
-  const fmtD = s => { const d = pd(s); return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} 週${'日一二三四五六'[d.getDay()]}`; };
-  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  document.getElementById('flightCount').textContent = b.flights.length;
-  document.getElementById('stayCount').textContent = b.stays.length;
-  document.getElementById('flightList').outerHTML = b.flights.map((f, i) => `<div class="card pass">
-      <div class="pass-top">
-        <div class="lbl">BOARDING PASS</div>
-        <div class="rt">${esc(f.route)}</div>
-        <div class="pass-main">
-          <div><div class="code">${esc(f.from)}</div><small>出發</small><div class="tm">${esc(f.dep)}</div></div>
-          <div class="mid"><svg class="ic" viewBox="0 0 24 24" id="ic-plane${i + 2}">${IC.plane}</svg></div>
-          <div style="text-align:right"><div class="code">${esc(f.to)}</div><small>抵達</small><div class="tm">${esc(f.arr)}</div></div>
-        </div>
-      </div>
-      <div class="pass-foot"><div>航班編號<b>${esc(f.flightNo)}</b></div><div style="text-align:right">日期<b>${fmtD(f.date)}</b></div></div>
-      <div class="pass-note">${esc(f.note)}</div>
-    </div>`).join('\n');
-  document.getElementById('stayList').outerHTML = b.stays.map(s => `<div class="card">
-      <div class="stay-name">${esc(s.name)}</div>
-      <div class="stay-date">${esc(s.dates)}</div>
-      <div class="stay-meta">${esc(s.meta)}</div>
-      <a class="maplink" href="${esc(gmap(s.q || s.name))}" target="_blank" rel="noopener"><svg class="ic" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>Google 地圖</a>${s.sticker ? `
-      <div class="sticker bob corner" id="stk-${s.sticker}"></div>` : ''}
-    </div>`).join('\n');
-})();
-
 
 /* ---------- placeable stickers (swappable assets) ----------
    To swap in designer PNGs: set src, e.g. { name:'招財貓', src:'assets/stickers/maneki.png' }.
@@ -510,60 +482,209 @@ $id('tmSave').onclick = () => {
 $id('addTrip').onclick = () => openTripModal();
 if (!IN_TRIP) { document.body.classList.add('at-home'); $id('home').hidden = false; renderHome(); }
 
-/* ---------- itinerary ---------- */
-const chipsEl = document.getElementById('chips');
-days.forEach((d, i) => {
-  const b = document.createElement('button');
-  b.className = 'chip' + (i === 0 ? ' active' : '');
-  b.innerHTML = `<small>${dowOf(d)}</small><b>${dayNum(d)}</b>`;
-  b.onclick = () => showDay(i);
-  chipsEl.appendChild(b);
-});
+
+/* ---------- shared helpers ---------- */
+const $ = id => document.getElementById(id);
+const TYPE_META = {
+  food: { label:'餐飲', ic:'food', cls:'t-food' },
+  sight: { label:'景點', ic:'pin', cls:'t-sight' },
+  transport: { label:'交通', ic:'train', cls:'t-transport' },
+  hotel: { label:'住宿', ic:'bed', cls:'t-hotel' },
+  shop: { label:'購物', ic:'bag', cls:'t-shop' }
+};
+const TYPE_KEYS = Object.keys(TYPE_META);
+function confirmAsk(msg, onYes) {
+  const M = $('confirmModal');
+  $('cfTitle').textContent = '確認';
+  $('cfMsg').textContent = msg;
+  $('cfYes').hidden = false;
+  $('cfYes').onclick = () => { M.hidden = true; onYes(); };
+  $('cfNo').onclick = () => { M.hidden = true; };
+  M.hidden = false;
+}
+/* re-normalize after load */
+APP.trips.forEach(t => (t.days || []).forEach(d => d.items = (d.items || []).map(normItem)));
+APP.settings = APP.settings || {};
+if (APP.settings.dark == null) APP.settings.dark = false;
+if (APP.settings.autoMerge == null) APP.settings.autoMerge = false;
+persist();
+
+const trip = getTrip();
+let days = trip.days;
+if (!trip.budget) trip.budget = { total: 0, rate: 0.052, expenses: [] };
+if (!trip.bookings) trip.bookings = { flights: [], stays: [] };
+(trip.bookings.flights || []).forEach(f => { if (!f.id) f.id = uid('f'); if (f.people == null) f.people = 1; if (f.amount == null) f.amount = 0; if (!f.fileId) f.fileId = ''; });
+(trip.bookings.stays || []).forEach(s => { if (!s.id) s.id = uid('s'); if (s.people == null) s.people = 1; if (s.amount == null) s.amount = 0; if (!s.fileId) s.fileId = ''; if (!s.q) s.q = s.name || ''; });
+
+/* ---------- IndexedDB for booking files ---------- */
+const IDB_NAME = 'travel_app_files', IDB_STORE = 'files';
+function idbOpen() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open(IDB_NAME, 1);
+    r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains(IDB_STORE)) r.result.createObjectStore(IDB_STORE); };
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function idbPut(key, blob) {
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(blob, key);
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
+}
+async function idbGet(key) {
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const rq = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(key);
+    rq.onsuccess = () => res(rq.result || null);
+    rq.onerror = () => rej(rq.error);
+  });
+}
+async function idbDel(key) {
+  if (!key) return;
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).delete(key);
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
+}
+
+/* ---------- itinerary (4a) ---------- */
+const chipsEl = $('chips');
 let currentDay = 0;
-function saveDays() { saveTrip(trip); }
+let actEdit = null; // { dayIdx, itemIdx } or null for add
+let amType = 'sight';
+let sortableInst = null;
+function saveDays() { trip.days = days; saveTrip(trip); }
+function rebuildChips() {
+  chipsEl.innerHTML = '';
+  days.forEach((d, i) => {
+    const b = document.createElement('button');
+    b.className = 'chip' + (i === currentDay ? ' active' : '');
+    b.innerHTML = `<small>${dowOf(d)}</small><b>${dayNum(d)}</b>`;
+    b.onclick = () => showDay(i);
+    chipsEl.appendChild(b);
+  });
+}
+function daySpend(d) {
+  return (d.items || []).reduce((s, it) => s + (+it.cost || 0) + (+it.ticket || 0), 0);
+}
+function openActModal(edit) {
+  actEdit = edit;
+  amType = edit ? (days[edit.dayIdx].items[edit.itemIdx].type || 'sight') : 'sight';
+  $('amTitle').textContent = edit ? '編輯活動' : '新增活動';
+  $('amTypes').innerHTML = TYPE_KEYS.map(k => {
+    const m = TYPE_META[k];
+    return `<button type="button" class="type-btn ${amType===k?'on':''}" data-t="${k}"><span class="dot">${ic(m.ic)}</span>${m.label}</button>`;
+  }).join('');
+  $('amTypes').querySelectorAll('.type-btn').forEach(b => b.onclick = () => {
+    amType = b.dataset.t;
+    $('amTypes').querySelectorAll('.type-btn').forEach(x => x.classList.toggle('on', x.dataset.t === amType));
+  });
+  const it = edit ? days[edit.dayIdx].items[edit.itemIdx] : null;
+  $('amRemind').setAttribute('aria-pressed', it && it.remind ? 'true' : 'false');
+  $('amRemind').classList.toggle('on', !!(it && it.remind));
+  $('amText').value = it ? (it.text || '') : '';
+  $('amTime').value = it ? (it.time || '') : '';
+  $('amTicket').value = it && it.ticket ? it.ticket : '';
+  $('amHours').value = it ? (it.hours || '') : '';
+  $('amCost').value = it && it.cost ? it.cost : '';
+  $('amFeat').value = it ? (it.feat || '') : '';
+  $('amNote').value = it ? (it.note || '') : '';
+  $('amMap').value = it ? (it.q || '') : '';
+  $('amErr').textContent = '';
+  $('actModal').hidden = false;
+}
+$('amRemind').onclick = () => {
+  const on = $('amRemind').getAttribute('aria-pressed') !== 'true';
+  $('amRemind').setAttribute('aria-pressed', on ? 'true' : 'false');
+  $('amRemind').classList.toggle('on', on);
+};
+$('amCancel').onclick = () => { $('actModal').hidden = true; };
+$('amSave').onclick = () => {
+  const text = $('amText').value.trim();
+  if (!text) return $('amErr').textContent = '請輸入名稱／地點';
+  const m = TYPE_META[amType] || TYPE_META.sight;
+  const item = normItem({
+    id: actEdit ? days[actEdit.dayIdx].items[actEdit.itemIdx].id : uid('a'),
+    type: amType, ic: m.ic, text,
+    time: $('amTime').value.trim() || '自由',
+    ticket: +$('amTicket').value || 0,
+    hours: $('amHours').value.trim(),
+    cost: +$('amCost').value || 0,
+    feat: $('amFeat').value.trim(),
+    note: $('amNote').value.trim(),
+    q: $('amMap').value.trim(),
+    remind: $('amRemind').getAttribute('aria-pressed') === 'true' ? 1 : 0,
+    must: actEdit ? days[actEdit.dayIdx].items[actEdit.itemIdx].must : 0,
+    opt: actEdit ? days[actEdit.dayIdx].items[actEdit.itemIdx].opt : undefined
+  });
+  if (actEdit) days[actEdit.dayIdx].items[actEdit.itemIdx] = item;
+  else days[currentDay].items.push(item);
+  saveDays(); $('actModal').hidden = true; showDay(currentDay);
+  if (typeof renderBudget === 'function') renderBudget();
+};
+function openDir(it) {
+  const dest = it.q || it.text;
+  $('dirFrom').textContent = '目前位置';
+  $('dirTo').textContent = dest;
+  $('dirGo').href = 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(dest) + '&travelmode=transit';
+  $('dirModal').hidden = false;
+}
+$('dirClose').onclick = () => { $('dirModal').hidden = true; };
+
 function showDay(i) {
+  if (i < 0 || i >= days.length) return;
   currentDay = i;
+  rebuildChips();
   const d = days[i];
-  chipsEl.querySelectorAll('.chip').forEach((c, k) => c.classList.toggle('active', k === i));
-  const wEl = document.getElementById('weather');
-  const hasW = !!(d.temp && d.temp.length);
-  wEl.style.display = hasW ? '' : 'none';
-  if (hasW) wEl.innerHTML = `
-    <div class="w-ic">${ic('cloud')}</div>
-    <div><div class="w-temp">${d.temp[0]}°C <i>/ ${d.temp[1]}°C</i></div><div class="w-note">11月季節參考</div></div>
-    <div class="w-right">${d.place}<small>最高 / 最低</small></div>`;
+  // weather slot filled by 4e
+  renderDayWeather(d);
+  const spend = daySpend(d);
+  const cur = trip.currency || 'JPY';
   document.getElementById('dayCard').innerHTML = `
     <div class="day-head">
       <div>
         <div class="day-date"><span class="dow">${dowOf(d)}</span><span class="num">${dayNum(d)}</span><span class="mon">${monOf(d)}</span></div>
-        <div class="day-title">Day ${i + 1} ${d.title || ''}</div>
-        ${d.route ? `<div class="day-route">✓ ${d.route}</div>` : ''}
+        <div class="day-title">Day ${i + 1} ${escH(d.title || '')}</div>
+        ${d.route ? `<div class="day-route">✓ ${escH(d.route)}</div>` : ''}
       </div>
       <div class="sticker bob" style="width:112px;height:112px;flex:none;margin-top:-6px">${cat(d.cat || 'maneki')}</div>
     </div>
-    ${d.hotel ? `<a class="hotel" href="${gmap(d.hq || d.hotel)}" target="_blank" rel="noopener">${ic('bed')}<span>${d.hotel}</span>${ic('pin')}</a>` : ''}
-    <div class="sec-title">活動安排 <span style="font-size:.8rem;color:var(--soft);font-weight:500">（可添加／刪除）</span></div>
+    <div class="day-spend"><span>今日預計花費</span><b>${spend ? spend.toLocaleString('en-US') + ' ' + cur : '—'}</b></div>
+    ${d.hotel ? `<a class="hotel" href="${gmap(d.hq || d.hotel)}" target="_blank" rel="noopener">${ic('bed')}<span>${escH(d.hotel)}</span>${ic('pin')}</a>` : ''}
+    <div class="sec-title">活動安排 <span style="font-size:.8rem;color:var(--soft);font-weight:500">（可新增／編輯／拖動）</span></div>
     <div id="actList"></div>
-    <div class="add-row" style="margin-top:10px;flex-wrap:wrap">
-      <input class="fld" id="newTime" placeholder="時間" style="width:80px;flex:none">
-      <input class="fld" id="newText" placeholder="活動內容" style="flex:1;min-width:140px">
-      <button class="btn" id="addAct" style="flex:none">新增</button>
-    </div>
-    <div class="add-row" style="margin-top:6px">
-      <input class="fld" id="newMap" placeholder="地圖關鍵字（可選，例如：竹乃屋 福岡空港）" style="flex:1">
+    <div class="add-row" style="margin-top:10px">
+      <button class="btn" id="addActBtn" style="flex:1">＋ 新增活動</button>
     </div>
     <button class="ghost stk-btn" id="stkOpen">🐾 選擇貼紙</button>
     <div class="stk-layer" id="stkLayer"></div>`;
   renderStickers(d);
   const list = document.getElementById('actList');
   d.items.forEach((it, idx) => {
+    const tm = TYPE_META[it.type] || TYPE_META.sight;
     const r = document.createElement('div');
-    r.className = 'act' + (it.opt === 'b' ? ' b' : '');
+    r.className = 'act ' + tm.cls + (it.opt === 'b' ? ' b' : '');
+    r.dataset.idx = idx;
+    const metaBits = [];
+    if (it.hours) metaBits.push('營業 ' + it.hours);
+    if (it.ticket) metaBits.push('門票 ' + it.ticket);
+    if (it.cost) metaBits.push('花費 ' + it.cost);
+    if (it.feat) metaBits.push(it.feat);
+    if (it.note) metaBits.push(it.note);
     r.innerHTML = `
-      <div class="dot">${ic(it.ic || 'pin')}</div>
+      <span class="handle" title="長按拖動">⠿</span>
+      <div class="dot">${ic(tm.ic)}</div>
       <div style="flex:1;min-width:0">
-        <div class="tm">${it.time}</div>
-        <div class="tx">${it.text}${it.must ? '<span class="must">必去</span>' : ''}</div>
+        <div class="tm">${escH(it.time)}${it.remind ? '<span class="bell">🔔</span>' : ''}</div>
+        <div class="tx">${escH(it.text)}${it.must ? '<span class="must">必去</span>' : ''}<span class="tag" style="margin-left:6px">${tm.label}</span></div>
+        ${metaBits.length ? `<div class="meta">${escH(metaBits.join(' · '))}</div>` : ''}
       </div>
       ${it.q ? mapLink(it.q) : ''}
       <div style="display:flex;flex-direction:column;gap:2px;margin-left:4px">
@@ -571,63 +692,80 @@ function showDay(i) {
         <button class="down" style="font-size:.75rem;padding:1px 6px;border:1.5px solid var(--line);border-radius:8px;background:#fff" aria-label="下移">↓</button>
       </div>
       <button class="del" style="margin-left:2px" aria-label="刪除">×</button>`;
-    r.querySelector('.del').onclick = () => {
-      d.items.splice(idx, 1);
-      saveDays();
-      showDay(i);
+    r.querySelector('.del').onclick = e => { e.stopPropagation(); confirmAsk('刪除呢個活動？', () => { d.items.splice(idx, 1); saveDays(); showDay(i); }); };
+    r.querySelector('.up').onclick = e => { e.stopPropagation(); if (idx > 0) { [d.items[idx-1], d.items[idx]] = [d.items[idx], d.items[idx-1]]; saveDays(); showDay(i); } };
+    r.querySelector('.down').onclick = e => { e.stopPropagation(); if (idx < d.items.length - 1) { [d.items[idx], d.items[idx+1]] = [d.items[idx+1], d.items[idx]]; saveDays(); showDay(i); } };
+    r.onclick = e => {
+      if (e.target.closest('.del,.up,.down,.map,.handle')) return;
+      openDir(it);
     };
-    r.querySelector('.up').onclick = () => {
-      if (idx > 0) {
-        [d.items[idx-1], d.items[idx]] = [d.items[idx], d.items[idx-1]];
-        saveDays();
-        showDay(i);
-      }
-    };
-    r.querySelector('.down').onclick = () => {
-      if (idx < d.items.length - 1) {
-        [d.items[idx], d.items[idx+1]] = [d.items[idx+1], d.items[idx]];
-        saveDays();
-        showDay(i);
-      }
-    };
+    r.ondblclick = e => { e.stopPropagation(); openActModal({ dayIdx: i, itemIdx: idx }); };
+    // long-press edit via contextmenu
+    r.oncontextmenu = e => { e.preventDefault(); openActModal({ dayIdx: i, itemIdx: idx }); };
     list.appendChild(r);
   });
-  document.getElementById('addAct').onclick = () => {
-    const t = document.getElementById('newTime').value.trim() || '自由';
-    const txt = document.getElementById('newText').value.trim();
-    if (!txt) return;
-    const q = document.getElementById('newMap').value.trim();
-    const item = normItem({ time: t, ic: 'pin', text: txt });
-    if (q) item.q = q;
-    d.items.push(item);
-    document.getElementById('newTime').value = '';
-    document.getElementById('newText').value = '';
-    document.getElementById('newMap').value = '';
-    saveDays();
-    showDay(i);
-  };
-  document.getElementById('newText').addEventListener('keydown', e => {
-    if (e.key === 'Enter') document.getElementById('addAct').click();
+  // SortableJS long-press drag
+  if (sortableInst) { try { sortableInst.destroy(); } catch (_) {} }
+  if (window.Sortable) {
+    sortableInst = Sortable.create(list, {
+      handle: '.handle',
+      animation: 150,
+      delay: 180,
+      delayOnTouchOnly: true,
+      ghostClass: 'sortable-ghost',
+      chosenClass: 'sortable-chosen',
+      onEnd: evt => {
+        const moved = d.items.splice(evt.oldIndex, 1)[0];
+        d.items.splice(evt.newIndex, 0, moved);
+        saveDays(); showDay(i);
+      }
+    });
+  }
+  $('addActBtn').onclick = () => openActModal(null);
+  // tap activity once opens dir; edit via long-press or double-click — also add edit button on long tap alternative:
+  list.querySelectorAll('.act').forEach((r, idx) => {
+    let t0 = 0;
+    r.addEventListener('pointerdown', () => { t0 = Date.now(); });
+    r.addEventListener('pointerup', e => {
+      if (e.target.closest('.del,.up,.down,.map,.handle')) return;
+      if (Date.now() - t0 > 500) { openActModal({ dayIdx: i, itemIdx: idx }); }
+    });
   });
 }
-showDay(0);
+rebuildChips();
 
-/* ---------- stickers on other tabs ---------- */
-document.getElementById('stk-top').innerHTML = `<div style="position:absolute;left:0;top:6px;width:64px;height:64px">${cat('sakura')}</div><div style="position:absolute;right:0;top:0;width:70px;height:70px">${cat('maneki')}</div>`;
-{ const sb = document.getElementById('stk-bowl'); if (sb) sb.innerHTML = cat('bowl'); }
-document.getElementById('stk-todo').innerHTML = cat('ramen');
+$('addDayBtn').onclick = () => {
+  const last = days[days.length - 1];
+  const next = new Date(pd(last ? last.date : trip.startDate));
+  next.setDate(next.getDate() + 1);
+  const ds = isoDate(next);
+  days.push({ date: ds, title: '', items: [], stickers: [] });
+  if (ds > trip.endDate) trip.endDate = ds;
+  saveDays(); currentDay = days.length - 1; showDay(currentDay);
+};
+$('delDayBtn').onclick = () => {
+  if (days.length <= 1) return confirmAsk('至少要保留一日行程。', () => {});
+  confirmAsk(`刪除 ${days[currentDay].date} 呢一日同入面所有活動？`, () => {
+    days.splice(currentDay, 1);
+    trip.startDate = days[0].date;
+    trip.endDate = days[days.length - 1].date;
+    saveDays();
+    currentDay = Math.min(currentDay, days.length - 1);
+    showDay(currentDay);
+  });
+};
 
-/* ---------- countdown (per active trip) ---------- */
+/* ---------- countdown ---------- */
 const target = new Date(trip.startDate + 'T00:00:00').getTime();
 const tripEnd = new Date(trip.endDate + 'T23:59:59').getTime();
 (function () {
   const d = pd(trip.startDate);
-  document.getElementById('cdFoot').innerHTML = `<span class="ft-lab">出發日</span><b>${d.getFullYear()}</b><i>年</i><b>${d.getMonth() + 1}</b><i>月</i><b>${d.getDate()}</b><i>日</i><span class="ft-dow">週${'日一二三四五六'[d.getDay()]}</span>`;
+  $('cdFoot').innerHTML = `<span class="ft-lab">出發日</span><b>${d.getFullYear()}</b><i>年</i><b>${d.getMonth() + 1}</b><i>月</i><b>${d.getDate()}</b><i>日</i><span class="ft-dow">週${'日一二三四五六'[d.getDay()]}</span>`;
   document.title = `${trip.title}｜${trip.startDate.slice(5).replace('-', '/')}–${trip.endDate.slice(5).replace('-', '/')}`;
 })();
 function tick() {
   const now = Date.now(), diff = target - now;
-  const cd = document.getElementById('cd'), bar = document.getElementById('bar'), plane = document.getElementById('plane'), lab = document.getElementById('cdLabel');
+  const cd = $('cd'), bar = $('bar'), plane = $('plane'), lab = $('cdLabel');
   if (diff <= 0) {
     if (now > tripEnd) { lab.textContent = trip.title; cd.textContent = '旅程已完成 🎉'; bar.style.width = '100%'; plane.style.left = '100%'; return; }
     const total = tripEnd - target, pct = Math.min(100, (now - target) / total * 100);
@@ -644,110 +782,229 @@ function tick() {
 }
 tick(); setInterval(tick, 1000);
 
-/* ---------- tabs ---------- */
+/* ---------- tabs / nav ---------- */
 document.querySelectorAll('#nav button').forEach(b => b.onclick = () => {
   document.querySelectorAll('#nav button').forEach(x => x.classList.toggle('active', x === b));
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === b.dataset.v));
   window.scrollTo({ top: 0 });
 });
-
-/* ---------- storage helpers ---------- */
-
-/* ---------- todo ---------- */
-let todos = trip.todos;
-function renderTodos() {
-  const box = document.getElementById('todoList');
-  box.innerHTML = '';
-  todos.forEach((o, i) => {
-    const r = document.createElement('div');
-    r.className = 'todo' + (o.d ? ' done' : '');
-    r.innerHTML = `<input type="checkbox" id="td${i}" ${o.d ? 'checked' : ''}><label for="td${i}"></label><button class="del" aria-label="刪除">×</button>`;
-    r.querySelector('label').textContent = o.t;
-    r.querySelector('input').onchange = e => { o.d = e.target.checked ? 1 : 0; save(); };
-    r.querySelector('.del').onclick = () => { todos.splice(i, 1); save(); };
-    box.appendChild(r);
-  });
-  const done = todos.filter(o => o.d).length, pct = todos.length ? Math.round(done / todos.length * 100) : 0;
-  document.getElementById('todoPct').textContent = `${done}/${todos.length} · ${pct}%`;
-  document.getElementById('todoBar').style.width = pct + '%';
-}
-function save() { trip.todos = todos; saveTrip(trip); renderTodos(); }
-document.getElementById('todoAdd').onclick = () => {
-  const inp = document.getElementById('todoNew'), v = inp.value.trim();
-  if (!v) return; todos.push({ t: v, d: 0 }); inp.value = ''; save();
-};
-document.getElementById('todoNew').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('todoAdd').click(); });
-renderTodos();
-
-/* ---------- settings ---------- */
-const themes = [['#D49A62','#B87D46'],['#7B8FC4','#5F74AA'],['#93C3A4','#76A788'],['#E89F9F','#CE8080'],['#B5A5D6','#9A89BE'],['#E8C86A','#CCAA48'],['#C8442F','#A43220']];
-const themeNames = ['琥珀','藍','綠','櫻花粉','紫','黃','楓葉紅'];
-function applyTheme(i) {
-  const [a, b] = themes[i];
-  const root = document.documentElement.style;
-  root.setProperty('--pri', a); root.setProperty('--pri-d', b);
-  root.setProperty('--tint', `color-mix(in srgb, ${a} 14%, #FFFBF0)`);
-  document.querySelectorAll('.sw').forEach((e, k) => e.classList.toggle('on', k === i));
-  document.getElementById('themeName').textContent = '目前：' + themeNames[i];
-  setSetting('theme', i);
-}
-const swBox = document.getElementById('swatches');
-themes.forEach((t, i) => { const b = document.createElement('button'); b.className = 'sw'; b.style.background = t[0]; b.setAttribute('aria-label', themeNames[i]); b.onclick = () => applyTheme(i); swBox.appendChild(b); });
-applyTheme(getSetting('theme', 6));
-
-const fs = document.getElementById('fs');
-function applyFs(v) { document.documentElement.style.fontSize = v + 'px'; document.getElementById('fsVal').textContent = v + 'px'; fs.value = v; setSetting('fs', v); }
-fs.oninput = () => applyFs(+fs.value);
-applyFs(getSetting('fs', 16));
-
-/* ---------- falling effects ---------- */
-const FX = [['none', '✕', '無'], ['sakura', '🌸', '櫻花'], ['leaf', '🍁', '秋葉']];
-const LEAF_COLORS = ['#E2762F', '#C9442B', '#E8A93A', '#B0522A', '#D98B2B'];
-const LEAF_PATH = 'M12 1.5 L14.2 6.5 L17.5 4.5 L16.8 9.5 L22 8.5 L18.6 12.6 L20.5 15 L14.6 15 L13 21.5 H11 L9.4 15 L3.5 15 L5.4 12.6 L2 8.5 L7.2 9.5 L6.5 4.5 L9.8 6.5 Z';
-const pBox = document.getElementById('petals');
-function buildFx(type) {
-  pBox.innerHTML = '';
-  if (type === 'none') return;
-  const leaf = type === 'leaf', n = leaf ? 14 : 16;
-  for (let i = 0; i < n; i++) {
-    const el = document.createElement('div'), s = leaf ? 16 + Math.random() * 12 : 8 + Math.random() * 9;
-    el.className = leaf ? 'leaf' : 'petal';
-    el.style.cssText = `left:${Math.random() * 100}%;width:${s}px;height:${s}px;animation-duration:${(leaf ? 11 : 9) + Math.random() * 9}s;animation-delay:${-Math.random() * 16}s`;
-    if (leaf) el.innerHTML = `<svg viewBox="0 0 24 24"><path d="${LEAF_PATH}" fill="${LEAF_COLORS[i % LEAF_COLORS.length]}"/><path d="M12 20V8M12 14L8 11M12 14L16 11" stroke="rgba(255,255,255,.4)" stroke-width=".8" stroke-linecap="round" fill="none"/></svg>`;
-    pBox.appendChild(el);
-  }
-}
-let curFx = 'sakura';
-const fxGrid = document.getElementById('fxGrid');
-FX.forEach(([k, e, t]) => {
-  const b = document.createElement('button');
-  b.className = 'fx'; b.dataset.k = k; b.innerHTML = `<span>${e}</span>${t}`;
-  b.onclick = () => setFx(k);
-  fxGrid.appendChild(b);
-});
-function setFx(k) {
-  curFx = k; buildFx(k);
-  fxGrid.querySelectorAll('.fx').forEach(b => b.classList.toggle('on', b.dataset.k === k));
-  setSetting('fx', k);
-}
-document.getElementById('fab').onclick = () => setFx(FX[(FX.findIndex(f => f[0] === curFx) + 1) % FX.length][0]);
-const savedFx = getSetting('fx', 'leaf');
-setFx(FX.some(f => f[0] === savedFx) ? savedFx : 'leaf');
-
-/* ---------- budget & currency ---------- */
-const $ = id => document.getElementById(id);
+$('stk-top').innerHTML = `<div style="position:absolute;left:0;top:6px;width:64px;height:64px">${cat('sakura')}</div><div style="position:absolute;right:0;top:0;width:70px;height:70px">${cat('maneki')}</div>`;
+const stkList = $('stk-list'); if (stkList) stkList.innerHTML = cat('bags');
 $('stk-bud').innerHTML = cat('shop');
+
+/* ---------- bookings CRUD (4b) ---------- */
+let bkKind = 'flight', bkEdit = null, bkPendingFile = null, bkFilter = 'all';
+function fmtBkDate(s) {
+  if (!s) return '';
+  const d = pd(s);
+  return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} 週${'日一二三四五六'[d.getDay()]}`;
+}
+function stayDatesLabel(s) {
+  if (s.checkIn && s.checkOut) return `${s.checkIn.slice(5).replace('-','/')} – ${s.checkOut.slice(5).replace('-','/')}`;
+  return s.dates || '';
+}
+function openBkModal(kind, edit) {
+  bkKind = kind; bkEdit = edit; bkPendingFile = null;
+  $('bkTitle').textContent = edit ? (kind === 'flight' ? '編輯機票' : '編輯住宿') : (kind === 'flight' ? '新增機票' : '新增住宿');
+  $('bkFlightFields').hidden = kind !== 'flight';
+  $('bkStayFields').hidden = kind !== 'stay';
+  $('bkErr').textContent = '';
+  $('bkFileNote').textContent = edit && edit.fileId ? '已上載 PDF／相片' : '未上載';
+  $('bkNote').value = edit ? (edit.note || edit.meta || '') : '';
+  $('bkAmt').value = edit && edit.amount ? edit.amount : '';
+  $('bkPeople').value = edit && edit.people ? edit.people : 1;
+  if (kind === 'flight') {
+    $('bkFlightNo').value = edit ? (edit.flightNo || '') : '';
+    $('bkFrom').value = edit ? (edit.from || '') : '';
+    $('bkTo').value = edit ? (edit.to || '') : '';
+    $('bkDep').value = edit ? (edit.dep || '') : '';
+    $('bkArr').value = edit ? (edit.arr || '') : '';
+    $('bkDate').value = edit ? (edit.date || trip.startDate) : trip.startDate;
+  } else {
+    $('bkName').value = edit ? (edit.name || '') : '';
+    $('bkIn').value = edit ? (edit.checkIn || trip.startDate) : trip.startDate;
+    $('bkOut').value = edit ? (edit.checkOut || trip.endDate) : trip.endDate;
+    $('bkAddr').value = edit ? (edit.addr || edit.meta || '') : '';
+    $('bkQ').value = edit ? (edit.q || edit.name || '') : '';
+  }
+  $('bkModal').hidden = false;
+}
+async function handleBkFile(file) {
+  if (!file) return;
+  bkPendingFile = file;
+  $('bkFileNote').textContent = file.type.includes('pdf') ? '已選 PDF（儲存時寫入）' : '已選相片（儲存時寫入）';
+}
+$('bkFile').onchange = e => { handleBkFile(e.target.files[0]); e.target.value = ''; };
+$('bkCam').onchange = e => { handleBkFile(e.target.files[0]); e.target.value = ''; };
+$('bkCancel').onclick = () => { $('bkModal').hidden = true; };
+$('bkSave').onclick = async () => {
+  if (bkKind === 'flight') {
+    const flightNo = $('bkFlightNo').value.trim(), from = $('bkFrom').value.trim().toUpperCase(), to = $('bkTo').value.trim().toUpperCase();
+    if (!flightNo || !from || !to) return $('bkErr').textContent = '請填航班編號同機場';
+    const o = {
+      id: bkEdit ? bkEdit.id : uid('f'),
+      flightNo, from, to,
+      dep: $('bkDep').value.trim(), arr: $('bkArr').value.trim(),
+      date: $('bkDate').value || trip.startDate,
+      route: `${from} → ${to}`,
+      note: $('bkNote').value.trim(),
+      amount: +$('bkAmt').value || 0,
+      people: Math.max(1, +$('bkPeople').value || 1),
+      fileId: bkEdit ? (bkEdit.fileId || '') : ''
+    };
+    if (bkPendingFile) {
+      o.fileId = o.id + '_file';
+      await idbPut(o.fileId, bkPendingFile);
+    }
+    const arr = trip.bookings.flights;
+    const ix = arr.findIndex(x => x.id === o.id);
+    if (ix >= 0) arr[ix] = o; else arr.push(o);
+  } else {
+    const name = $('bkName').value.trim();
+    if (!name) return $('bkErr').textContent = '請填酒店名稱';
+    const o = {
+      id: bkEdit ? bkEdit.id : uid('s'),
+      name,
+      checkIn: $('bkIn').value || trip.startDate,
+      checkOut: $('bkOut').value || trip.endDate,
+      addr: $('bkAddr').value.trim(),
+      q: $('bkQ').value.trim() || name,
+      note: $('bkNote').value.trim(),
+      meta: $('bkAddr').value.trim() || $('bkNote').value.trim(),
+      amount: +$('bkAmt').value || 0,
+      people: Math.max(1, +$('bkPeople').value || 1),
+      fileId: bkEdit ? (bkEdit.fileId || '') : ''
+    };
+    o.dates = stayDatesLabel(o);
+    if (bkPendingFile) {
+      o.fileId = o.id + '_file';
+      await idbPut(o.fileId, bkPendingFile);
+    }
+    const arr = trip.bookings.stays;
+    const ix = arr.findIndex(x => x.id === o.id);
+    if (ix >= 0) arr[ix] = o; else arr.push(o);
+  }
+  saveTrip(trip); $('bkModal').hidden = true; renderBookings();
+};
+$('addFlight').onclick = () => openBkModal('flight', null);
+$('addStay').onclick = () => openBkModal('stay', null);
+document.querySelectorAll('#bkTabs .tab').forEach(b => b.onclick = () => {
+  document.querySelectorAll('#bkTabs .tab').forEach(x => x.classList.toggle('on', x === b));
+  bkFilter = b.dataset.bk; renderBookings();
+});
+async function openBkFile(fileId) {
+  const blob = await idbGet(fileId);
+  if (!blob) return alert('搵唔到上載檔案');
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+function renderBookings() {
+  const b = trip.bookings;
+  const box = $('bookAll');
+  let html = '';
+  const showF = bkFilter === 'all' || bkFilter === 'flight';
+  const showS = bkFilter === 'all' || bkFilter === 'stay';
+  if (showF) {
+    if (!b.flights.length) html += '<div class="empty">未有機票，撳上面新增</div>';
+    b.flights.forEach((f, i) => {
+      html += `<div class="card pass" data-id="${escH(f.id)}">
+        <div class="pass-top">
+          <div class="lbl">BOARDING PASS</div>
+          <div class="rt">${escH(f.route || (f.from + ' → ' + f.to))}</div>
+          <div class="pass-main">
+            <div><div class="code">${escH(f.from)}</div><small>出發</small><div class="tm">${escH(f.dep)}</div></div>
+            <div class="mid"><svg class="ic" viewBox="0 0 24 24">${IC.plane}</svg></div>
+            <div style="text-align:right"><div class="code">${escH(f.to)}</div><small>抵達</small><div class="tm">${escH(f.arr)}</div></div>
+          </div>
+        </div>
+        <div class="pass-foot"><div>航班編號<b>${escH(f.flightNo)}</b></div><div style="text-align:right">日期<b>${fmtBkDate(f.date)}</b></div></div>
+        ${f.note ? `<div class="pass-note">${escH(f.note)}</div>` : ''}
+        ${f.amount ? `<div class="pass-note">金額 ${f.amount} · 分攤 ${f.people || 1} 人</div>` : ''}
+        ${f.fileId ? `<span class="file-badge">已上載 PDF／相片</span>` : ''}
+        <div class="bk-actions">
+          <button class="ghost sm" data-a="edit">編輯</button>
+          ${f.fileId ? `<button class="ghost sm" data-a="file">睇檔案</button>` : ''}
+          <button class="ghost sm danger-text" data-a="del">刪除</button>
+        </div>
+      </div>`;
+    });
+  }
+  if (showS) {
+    if (!b.stays.length) html += '<div class="empty">未有住宿，撳上面新增</div>';
+    b.stays.forEach(s => {
+      html += `<div class="card" data-id="${escH(s.id)}" data-kind="stay">
+        <div class="stay-name">${escH(s.name)}</div>
+        <div class="stay-date">${escH(stayDatesLabel(s))}</div>
+        <div class="stay-meta">${escH(s.addr || s.meta || s.note || '')}</div>
+        <a class="maplink" href="${escH(gmap(s.q || s.name))}" target="_blank" rel="noopener">${ic('pin')}Google 地圖</a>
+        ${s.amount ? `<div class="pass-note" style="margin-top:8px">金額 ${s.amount} · 分攤 ${s.people || 1} 人</div>` : ''}
+        ${s.fileId ? `<span class="file-badge">已上載 PDF／相片</span>` : ''}
+        <div class="bk-actions">
+          <button class="ghost sm" data-a="edit">編輯</button>
+          ${s.fileId ? `<button class="ghost sm" data-a="file">睇檔案</button>` : ''}
+          <button class="ghost sm danger-text" data-a="del">刪除</button>
+        </div>
+      </div>`;
+    });
+  }
+  box.innerHTML = html || '<div class="empty">未有預約</div>';
+  box.querySelectorAll('.card').forEach(card => {
+    const id = card.dataset.id;
+    const isStay = card.dataset.kind === 'stay';
+    card.querySelectorAll('[data-a]').forEach(btn => btn.onclick = async e => {
+      e.preventDefault(); e.stopPropagation();
+      const a = btn.dataset.a;
+      if (isStay) {
+        const s = trip.bookings.stays.find(x => x.id === id);
+        if (a === 'edit') openBkModal('stay', s);
+        if (a === 'file') openBkFile(s.fileId);
+        if (a === 'del') confirmAsk('刪除呢間住宿？', async () => {
+          if (s.fileId) await idbDel(s.fileId);
+          trip.bookings.stays = trip.bookings.stays.filter(x => x.id !== id);
+          saveTrip(trip); renderBookings();
+        });
+      } else {
+        const f = trip.bookings.flights.find(x => x.id === id);
+        if (a === 'edit') openBkModal('flight', f);
+        if (a === 'file') openBkFile(f.fileId);
+        if (a === 'del') confirmAsk('刪除呢張機票？', async () => {
+          if (f.fileId) await idbDel(f.fileId);
+          trip.bookings.flights = trip.bookings.flights.filter(x => x.id !== id);
+          saveTrip(trip); renderBookings();
+        });
+      }
+    });
+  });
+}
+renderBookings();
+
+/* ---------- budget (4c) ---------- */
 const CATS = [['food','餐飲','food'],['transport','交通','train'],['stay','住宿','bed'],['sight','觀光','pin'],['shop','購物','bag'],['other','其他','box']];
+const TYPE_TO_CAT = { food:'food', transport:'transport', hotel:'stay', sight:'sight', shop:'shop' };
+const DEF_RATES = { JPY:0.052, THB:0.22, KRW:0.0056, TWD:0.24, USD:7.8, EUR:8.4, GBP:9.9 };
 let budget = +trip.budget.total || 0;
-let rate = +trip.budget.rate || 0.052;
+let rate = +trip.budget.rate || DEF_RATES[trip.currency] || 0.052;
 if (!Array.isArray(trip.budget.expenses)) trip.budget.expenses = [];
 let exps = trip.budget.expenses;
+const curCode = () => trip.currency || 'JPY';
 const saveBudget = () => { trip.budget.total = budget; trip.budget.rate = rate; trip.budget.expenses = exps; saveTrip(trip); };
 const money = n => '$' + Math.round(n).toLocaleString('en-US');
 const fmt = n => (isFinite(n) && n) ? String(Math.round(n * 100) / 100) : '';
-
+function updateCurLabels() {
+  const c = curCode();
+  $('rateCur').textContent = c;
+  $('curLeft').textContent = c;
+  $('budCurLab').textContent = `總預算（HKD）`;
+  $('jpy').placeholder = '0';
+  document.querySelector('#sumCard .lab:last-of-type') || 0;
+  const labs = $('sumCard').querySelectorAll('.lab');
+  if (labs[1]) labs[1].textContent = '已花費 (HKD)';
+}
+updateCurLabels();
 $('expFilter').innerHTML = '<option value="all">全部</option>' + CATS.map(c => `<option value="${c[0]}">${c[1]}</option>`).join('');
 $('expCat').innerHTML = CATS.map(c => `<option value="${c[0]}">${c[1]}</option>`).join('');
+$('expCur').innerHTML = `<option value="${curCode()}">${curCode()}</option><option value="HKD">HKD</option>`;
 $('expFilter').onchange = () => renderBudget();
 
 const jpy = $('jpy'), hkd = $('hkd'), rateIn = $('rateIn');
@@ -761,7 +1018,11 @@ rateIn.onchange = () => {
 };
 $('rateUpd').onclick = async () => {
   const note = $('rateNote'); note.textContent = '更新中…';
-  const urls = ['https://api.frankfurter.app/latest?from=JPY&to=HKD', 'https://open.er-api.com/v6/latest/JPY'];
+  const c = curCode();
+  const urls = [
+    `https://api.frankfurter.app/latest?from=${c}&to=HKD`,
+    `https://open.er-api.com/v6/latest/${c}`
+  ];
   for (const u of urls) {
     try {
       const d = await (await fetch(u)).json();
@@ -776,25 +1037,46 @@ $('rateUpd').onclick = async () => {
   }
   note.textContent = '未能連線，沿用 ' + rate.toFixed(4) + '，可手動輸入';
 };
-
 $('setBudBtn').onclick = () => {
   const p = $('budPanel'); p.hidden = !p.hidden;
   if (!p.hidden) { $('budIn').value = budget || ''; $('budIn').focus(); }
 };
 $('budSave').onclick = () => { budget = Math.max(0, +$('budIn').value || 0); saveBudget(); $('budPanel').hidden = true; renderBudget(); };
+const autoMergeEl = $('autoMerge');
+autoMergeEl.setAttribute('aria-pressed', getSetting('autoMerge', false) ? 'true' : 'false');
+autoMergeEl.classList.toggle('on', !!getSetting('autoMerge', false));
+autoMergeEl.onclick = () => {
+  const on = autoMergeEl.getAttribute('aria-pressed') !== 'true';
+  autoMergeEl.setAttribute('aria-pressed', on ? 'true' : 'false');
+  autoMergeEl.classList.toggle('on', on);
+  setSetting('autoMerge', on); renderBudget();
+};
 $('expToggle').onclick = () => { $('expPanel').hidden = !$('expPanel').hidden; };
 $('expAdd').onclick = () => {
   const a = +$('expAmt').value, cur = $('expCur').value, cat = $('expCat').value;
   if (!(a > 0)) { $('expAmt').focus(); return; }
   const n = $('expName').value.trim() || CATS.find(c => c[0] === cat)[1];
-  exps.unshift({ id: Date.now(), n, a, cur, hkd: cur === 'JPY' ? a * rate : a, cat });
+  exps.unshift({ id: Date.now(), n, a, cur, hkd: cur === 'HKD' ? a : a * rate, cat });
   saveBudget();
   $('expName').value = ''; $('expAmt').value = ''; $('expPanel').hidden = true;
   renderBudget();
 };
-
+function activityMerged() {
+  if (!getSetting('autoMerge', false)) return [];
+  const map = {};
+  days.forEach(d => (d.items || []).forEach(it => {
+    const cat = TYPE_TO_CAT[it.type] || 'other';
+    const amt = (+it.cost || 0) + (+it.ticket || 0);
+    if (!(amt > 0)) return;
+    if (!map[cat]) map[cat] = 0;
+    map[cat] += amt * rate;
+  }));
+  return Object.entries(map).map(([cat, hkd]) => ({ id: 'auto_' + cat, n: '行程自動併入', a: hkd / rate, cur: curCode(), hkd, cat, auto: 1 }));
+}
 function renderBudget() {
-  const spent = exps.reduce((s, e) => s + e.hkd, 0), left = budget - spent;
+  const merged = activityMerged();
+  const all = exps.concat(merged);
+  const spent = all.reduce((s, e) => s + e.hkd, 0), left = budget - spent;
   const over = budget > 0 && left < 0;
   $('sumTotal').textContent = money(budget);
   $('sumSpent').textContent = money(spent);
@@ -804,7 +1086,7 @@ function renderBudget() {
   $('sumLeft').textContent = budget > 0 ? money(Math.abs(left)) : '請先設置預算';
 
   $('catList').innerHTML = CATS.map(([k, n, i]) => {
-    const v = exps.filter(e => e.cat === k).reduce((s, e) => s + e.hkd, 0);
+    const v = all.filter(e => e.cat === k).reduce((s, e) => s + e.hkd, 0);
     if (!v) return '';
     const p = Math.round(v / (spent || 1) * 100);
     return `<div class="cat-row"><div class="cat-ic">${ic(i)}</div><div class="cat-main"><div class="cat-top"><b>${n}</b><span>${money(v)} · ${p}%</span></div><div class="cat-bar"><i style="width:${p}%"></i></div></div></div>`;
@@ -812,107 +1094,34 @@ function renderBudget() {
 
   const f = $('expFilter').value, box = $('expList');
   box.innerHTML = '';
-  const list = exps.filter(e => f === 'all' || e.cat === f);
+  const list = all.filter(e => f === 'all' || e.cat === f);
   if (!list.length) { box.innerHTML = '<div class="empty">暫時未有支出，撳「新增」記一筆</div>'; return; }
   list.forEach(e => {
     const c = CATS.find(x => x[0] === e.cat) || CATS[5];
     const r = document.createElement('div');
     r.className = 'exp';
-    r.innerHTML = `<div class="cat-ic">${ic(c[2])}</div><div class="exp-m"><div class="exp-n"></div><div class="exp-s">${c[1]}</div></div><div class="exp-a"><b>${money(e.hkd)}</b><small>${e.cur === 'JPY' ? '¥' + Math.round(e.a).toLocaleString('en-US') : 'HKD'}</small></div><button class="del" aria-label="刪除">×</button>`;
+    const curLab = e.cur === 'HKD' ? 'HKD' : (e.cur || curCode()) + ' ' + Math.round(e.a).toLocaleString('en-US');
+    r.innerHTML = `<div class="cat-ic">${ic(c[2])}</div><div class="exp-m"><div class="exp-n"></div><div class="exp-s">${c[1]}${e.auto ? ' · 自動' : ''}</div></div><div class="exp-a"><b>${money(e.hkd)}</b><small>${curLab}</small></div>${e.auto ? '' : '<button class="del" aria-label="刪除">×</button>'}`;
     r.querySelector('.exp-n').textContent = e.n;
-    r.querySelector('.del').onclick = () => { exps = exps.filter(x => x.id !== e.id); saveBudget(); renderBudget(); };
+    const del = r.querySelector('.del');
+    if (del) del.onclick = () => { exps = exps.filter(x => x.id !== e.id); saveBudget(); renderBudget(); };
     box.appendChild(r);
   });
 }
 renderBudget();
 
-/* ---------- shopping list ---------- */
-function person(kind) {
-  const ink = '#5A4638', skin = '#FFE3CC', blush = '#F79EA6';
-  const sw = `stroke="${ink}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"`;
-  let s = '<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">';
-  s += '<ellipse cx="60" cy="117" rx="40" ry="3.6" fill="#000" opacity=".08"/>';
-  if (kind === 'girl') {
-    const hair = '#4B3226', hl = '#7A5640', top = '#F2A7AE', skirt = '#6F86B8';
-    // cart (behind the girl's arms)
-    s += `<path d="M86 100 L80 106 M104 100 L106 106" ${sw} fill="none"/>`;
-    s += `<circle cx="80" cy="108" r="4.6" fill="#8A7566" ${sw}/><circle cx="106" cy="108" r="4.6" fill="#8A7566" ${sw}/>`;
-    // goods sticking out of the cart
-    s += `<path d="M78 52 H94 L92 72 H80Z" fill="#E4574F" ${sw}/><path d="M82 52 Q82 44 86 44 Q90 44 90 52" fill="none" ${sw}/><rect x="82" y="60" width="8" height="5" rx="1.5" fill="#fff" opacity=".85"/>`;
-    s += `<path d="M96 58 H112 V72 H96Z" fill="#F4C84E" ${sw}/><path d="M96 63 H112" stroke="${ink}" stroke-width="1.6"/>`;
-    s += `<path d="M99 58 Q101 48 104 52 Q106 46 109 58" fill="#8FBFA6" ${sw}/>`;
-    // basket
-    s += `<path d="M72 68 H116 L108 98 H80Z" fill="#FFF8EA" ${sw}/>`;
-    s += `<path d="M76 79 H112 M78 89 H110 M86 68 L88 98 M97 68 L98 98 M107 68 L106 98" stroke="#BDB39C" stroke-width="1.6" fill="none"/>`;
-    s += `<path d="M72 68 H116 L108 98 H80Z" fill="none" ${sw}/>`;
-    // braids
-    s += `<path d="M20 52 Q12 70 20 90" fill="none" stroke="${ink}" stroke-width="11" stroke-linecap="round"/><path d="M20 52 Q12 70 20 90" fill="none" stroke="${hair}" stroke-width="7.4" stroke-linecap="round"/>`;
-    s += `<path d="M64 52 Q72 70 64 90" fill="none" stroke="${ink}" stroke-width="11" stroke-linecap="round"/><path d="M64 52 Q72 70 64 90" fill="none" stroke="${hair}" stroke-width="7.4" stroke-linecap="round"/>`;
-    s += `<circle cx="20" cy="90" r="3.4" fill="#E4574F" ${sw}/><circle cx="64" cy="90" r="3.4" fill="#E4574F" ${sw}/>`;
-    // legs + shoes
-    s += `<rect x="33" y="96" width="9" height="12" fill="${skin}" ${sw}/><rect x="45" y="96" width="9" height="12" fill="${skin}" ${sw}/>`;
-    s += `<path d="M30 110 Q30 106 36 106 H42 V112 H30Z" fill="#7A4B3A" ${sw}/><path d="M42 110 Q42 106 48 106 H54 V112 H42Z" fill="#7A4B3A" ${sw}/>`;
-    // skirt + top
-    s += `<path d="M29 92 Q42 88 55 92 L60 104 Q42 109 24 104Z" fill="${skirt}" ${sw}/><path d="M33 98 L32 104 M42 99 V106 M51 98 L52 104" stroke="#566A9A" stroke-width="1.6" stroke-linecap="round"/>`;
-    s += `<path d="M30 68 Q28 86 31 94 H53 Q56 86 54 68 Q42 62 30 68Z" fill="${top}" ${sw}/><path d="M42 66 V93" stroke="#D98890" stroke-width="1.8"/>`;
-    s += `<circle cx="38" cy="82" r="1.5" fill="#fff"/><circle cx="46" cy="82" r="1.5" fill="#fff"/>`;
-    // arm to cart handle
-    s += `<path d="M54 72 Q64 78 72 73" fill="none" stroke="${ink}" stroke-width="10.5" stroke-linecap="round"/><path d="M54 72 Q64 78 72 73" fill="none" stroke="${top}" stroke-width="6.8" stroke-linecap="round"/>`;
-    s += `<circle cx="73" cy="72" r="4.6" fill="${skin}" ${sw}/>`;
-    s += `<path d="M70 66 H80" stroke="${ink}" stroke-width="3.2" stroke-linecap="round"/>`;
-    // neck + head
-    s += `<rect x="37" y="58" width="10" height="10" rx="3" fill="${skin}" ${sw}/>`;
-    s += `<circle cx="42" cy="40" r="22" fill="${skin}" ${sw}/>`;
-    s += `<circle cx="20" cy="44" r="3.4" fill="${skin}" ${sw}/><circle cx="64" cy="44" r="3.4" fill="${skin}" ${sw}/>`;
-    // hair top + bangs
-    s += `<path d="M19 42 Q16 14 42 14 Q68 14 65 42 Q62 28 52 27 Q47 33 38 28 Q28 30 19 42Z" fill="${hair}" ${sw}/>`;
-    s += `<path d="M28 20 Q36 15 46 17" fill="none" stroke="${hl}" stroke-width="2.4" stroke-linecap="round"/>`;
-    // face
-    s += `<ellipse cx="33" cy="43" rx="3" ry="4" fill="${ink}"/><ellipse cx="51" cy="43" rx="3" ry="4" fill="${ink}"/><circle cx="34" cy="41.6" r="1.2" fill="#fff"/><circle cx="52" cy="41.6" r="1.2" fill="#fff"/>`;
-    s += `<ellipse cx="27" cy="50" rx="4.6" ry="2.8" fill="${blush}" opacity=".75"/><ellipse cx="57" cy="50" rx="4.6" ry="2.8" fill="${blush}" opacity=".75"/>`;
-    s += `<path d="M38.5 50 Q42 54 45.5 50" fill="none" stroke="${ink}" stroke-width="1.9" stroke-linecap="round"/>`;
-  } else {
-    const hair = '#2F2622', hl = '#5A4A42', sweater = '#F2C14E', pants = '#5C6B8A';
-    // legs + shoes
-    s += `<rect x="47" y="92" width="11" height="17" fill="${pants}" ${sw}/><rect x="62" y="92" width="11" height="17" fill="${pants}" ${sw}/>`;
-    s += `<path d="M44 112 Q44 107 50 107 H58 V113 H44Z" fill="#fff" ${sw}/><path d="M62 113 V107 H70 Q76 107 76 112 V113Z" fill="#fff" ${sw}/>`;
-    // back bag (green) + hand-held bags
-    s += `<path d="M97 84 H117 L116 106 H98Z" fill="#8FBFA6" ${sw}/><path d="M102 85 Q102 77 107 77 Q112 77 112 85" fill="none" ${sw}/><circle cx="107" cy="95" r="3.4" fill="#fff" opacity=".85"/>`;
-    s += `<path d="M77 98 H101 L99 118 H79Z" fill="#8DB7D8" ${sw}/><rect x="83" y="106" width="12" height="5" rx="1.6" fill="#fff" opacity=".85"/>`;
-    s += `<path d="M18 98 H42 L40 118 H20Z" fill="#E4574F" ${sw}/><rect x="24" y="106" width="12" height="5" rx="1.6" fill="#fff" opacity=".85"/>`;
-    // torso
-    s += `<rect x="53" y="55" width="14" height="12" rx="3" fill="${skin}" ${sw}/>`;
-    s += `<path d="M43 68 Q41 90 45 96 H75 Q79 90 77 68 Q60 60 43 68Z" fill="${sweater}" ${sw}/>`;
-    s += `<path d="M52 63 Q60 72 68 63" fill="none" ${sw}/><path d="M46 90 H74" stroke="#D9A22E" stroke-width="2"/>`;
-    // arms holding bags
-    s += `<path d="M44 70 Q31 80 33 93" fill="none" stroke="${ink}" stroke-width="11" stroke-linecap="round"/><path d="M44 70 Q31 80 33 93" fill="none" stroke="${sweater}" stroke-width="7.4" stroke-linecap="round"/>`;
-    s += `<path d="M76 70 Q89 80 87 93" fill="none" stroke="${ink}" stroke-width="11" stroke-linecap="round"/><path d="M76 70 Q89 80 87 93" fill="none" stroke="${sweater}" stroke-width="7.4" stroke-linecap="round"/>`;
-    s += `<path d="M24 99 Q24 91 31 91 Q38 91 37 99" fill="none" ${sw}/><path d="M81 99 Q81 91 88 91 Q95 91 95 99" fill="none" ${sw}/>`;
-    s += `<circle cx="33" cy="93" r="4.6" fill="${skin}" ${sw}/><circle cx="87" cy="93" r="4.6" fill="${skin}" ${sw}/>`;
-    // head
-    s += `<circle cx="38.5" cy="40" r="3.6" fill="${skin}" ${sw}/><circle cx="81.5" cy="40" r="3.6" fill="${skin}" ${sw}/>`;
-    s += `<circle cx="60" cy="37" r="22" fill="${skin}" ${sw}/>`;
-    s += `<path d="M38 34 Q35 12 60 12 Q85 12 82 34 Q80 24 70 23 Q64 28 54 24 Q44 24 38 34Z" fill="${hair}" ${sw}/>`;
-    s += `<path d="M46 17 Q54 12 63 14" fill="none" stroke="${hl}" stroke-width="2.4" stroke-linecap="round"/>`;
-    // glasses
-    s += `<circle cx="51" cy="40" r="7.2" fill="#fff" fill-opacity=".5" ${sw}/><circle cx="69" cy="40" r="7.2" fill="#fff" fill-opacity=".5" ${sw}/><path d="M58.2 40 H61.8 M43.8 39 L40.5 38.5 M76.2 39 L79.5 38.5" fill="none" ${sw}/>`;
-    s += `<circle cx="51" cy="41" r="2" fill="${ink}"/><circle cx="69" cy="41" r="2" fill="${ink}"/><circle cx="51.7" cy="40.2" r=".8" fill="#fff"/><circle cx="69.7" cy="40.2" r=".8" fill="#fff"/>`;
-    s += `<ellipse cx="44" cy="49" rx="4.2" ry="2.6" fill="${blush}" opacity=".7"/><ellipse cx="76" cy="49" rx="4.2" ry="2.6" fill="${blush}" opacity=".7"/>`;
-    s += `<path d="M55 49.5 Q60 54.5 65 49.5" fill="none" stroke="${ink}" stroke-width="1.9" stroke-linecap="round"/>`;
-  }
-  return s + '</svg>';
-}
-$('stk-shop').innerHTML = cat('bags');
-$('pgirl').innerHTML = person('girl');
-$('pboy').innerHTML = person('boy');
-
+/* ---------- list: shop + todo (4d) ---------- */
+document.querySelectorAll('#listTabs .tab').forEach(b => b.onclick = () => {
+  document.querySelectorAll('#listTabs .tab').forEach(x => x.classList.toggle('on', x === b));
+  $('listShop').hidden = b.dataset.list !== 'shop';
+  $('listTodo').hidden = b.dataset.list !== 'todo';
+});
 const SCATS = ['零食', '藥妝', '服飾', '紀念品', '其他'];
-let shop = trip.shop;
+let shop = trip.shop || [];
 $('spCat').innerHTML = SCATS.map(c => `<option>${c}</option>`).join('');
 $('spFilter').onchange = () => renderShop();
 let spImgData = '';
 const saveShop = () => { trip.shop = shop; saveTrip(trip); };
-
 function readImg(file) {
   return new Promise(res => {
     const fr = new FileReader();
@@ -933,8 +1142,7 @@ function readImg(file) {
   });
 }
 $('spImg').onchange = async e => {
-  const f = e.target.files[0];
-  if (!f) return;
+  const f = e.target.files[0]; if (!f) return;
   spImgData = await readImg(f);
   $('spPrev').hidden = !spImgData; $('spPrev').src = spImgData;
   $('spImgNote').textContent = spImgData ? '已加相' : '讀取相片失敗';
@@ -946,14 +1154,14 @@ $('spAdd').onclick = () => {
   shop.unshift({ id: Date.now(), n, note: $('spNote').value.trim(), cat: $('spCat').value, pri: +$('spPri').value, done: 0, img: spImgData });
   saveShop();
   $('spName').value = ''; $('spNote').value = ''; $('spImg').value = ''; spImgData = '';
-  $('spPrev').hidden = true; $('spImgNote').textContent = '可選，會自動縮細'; $('spPanel').hidden = true;
+  $('spPrev').hidden = true; $('spImgNote').textContent = '可選'; $('spPanel').hidden = true;
   renderShop();
 };
-
 function shopCard(it) {
   const d = document.createElement('div');
   d.className = 'card shop-item' + (it.done ? ' done' : '');
-  d.innerHTML = `<input type="checkbox" class="chk" ${it.done ? 'checked' : ''} aria-label="已購買">${it.img ? '<img class="thumb" alt="">' : ''}<div class="si-main"><div class="si-name"></div><div class="si-note"></div><div class="tags"><span class="tag t-cat"></span><span class="tag p${it.pri}">${it.pri ? '重要' : '一般'}</span></div></div><button class="del" aria-label="刪除">×</button>`;
+  const priLab = it.pri === 2 ? '必買' : it.pri === 1 ? '重要' : '一般';
+  d.innerHTML = `<input type="checkbox" class="chk" ${it.done ? 'checked' : ''} aria-label="已購買">${it.img ? '<img class="thumb" alt="">' : ''}<div class="si-main"><div class="si-name"></div><div class="si-note"></div><div class="tags"><span class="tag t-cat"></span><span class="tag p${it.pri}">${priLab}</span></div></div><button class="del" aria-label="刪除">×</button>`;
   d.querySelector('.si-name').textContent = it.n;
   const nt = d.querySelector('.si-note'); if (it.note) nt.textContent = it.note; else nt.remove();
   d.querySelector('.t-cat').textContent = it.cat;
@@ -978,3 +1186,207 @@ function renderShop() {
   done.forEach(x => D.appendChild(shopCard(x)));
 }
 renderShop();
+
+const TODO_GROUPS = { pre:'出發前', visa:'簽證', insurance:'保險', done:'已完成' };
+const PRESET_TODOS = [
+  { t:'護照', g:'pre' }, { t:'簽證', g:'visa' }, { t:'現金', g:'pre' }, { t:'信用卡', g:'pre' },
+  { t:'手機同充電器', g:'pre' }, { t:'網卡', g:'pre' }, { t:'常用藥品', g:'pre' },
+  { t:'轉接頭', g:'pre' }, { t:'雨具', g:'pre' }, { t:'旅行保險', g:'insurance' }
+];
+let todos = (trip.todos || []).map(o => Object.assign({ g: o.g || 'pre' }, o));
+function saveTodos() { trip.todos = todos; saveTrip(trip); renderTodos(); }
+function renderTodos() {
+  const box = $('todoList'); box.innerHTML = '';
+  const groups = ['pre','visa','insurance'];
+  groups.forEach(g => {
+    const items = todos.filter(o => !o.d && (o.g || 'pre') === g);
+    if (!items.length && g !== 'pre') return;
+    const h = document.createElement('div'); h.className = 'todo-group'; h.textContent = TODO_GROUPS[g]; box.appendChild(h);
+    items.forEach(o => {
+      const i = todos.indexOf(o);
+      const r = document.createElement('div');
+      r.className = 'todo';
+      r.innerHTML = `<input type="checkbox" id="td${i}"><label for="td${i}"></label><button class="del" aria-label="刪除">×</button>`;
+      r.querySelector('label').textContent = o.t;
+      r.querySelector('input').onchange = e => { o.d = e.target.checked ? 1 : 0; saveTodos(); };
+      r.querySelector('.del').onclick = () => { todos.splice(i, 1); saveTodos(); };
+      box.appendChild(r);
+    });
+  });
+  const doneItems = todos.filter(o => o.d);
+  if (doneItems.length) {
+    const h = document.createElement('div'); h.className = 'todo-group'; h.textContent = '已完成'; box.appendChild(h);
+    doneItems.forEach(o => {
+      const i = todos.indexOf(o);
+      const r = document.createElement('div');
+      r.className = 'todo done';
+      r.innerHTML = `<input type="checkbox" id="td${i}" checked><label for="td${i}"></label><button class="del" aria-label="刪除">×</button>`;
+      r.querySelector('label').textContent = o.t;
+      r.querySelector('input').onchange = e => { o.d = e.target.checked ? 1 : 0; saveTodos(); };
+      r.querySelector('.del').onclick = () => { todos.splice(i, 1); saveTodos(); };
+      box.appendChild(r);
+    });
+  }
+  const done = todos.filter(o => o.d).length, pct = todos.length ? Math.round(done / todos.length * 100) : 0;
+  $('todoPct').textContent = `${done}/${todos.length} · ${pct}%`;
+  $('todoBar').style.width = pct + '%';
+}
+$('todoAdd').onclick = () => {
+  const inp = $('todoNew'), v = inp.value.trim();
+  if (!v) return; todos.push({ t: v, d: 0, g: $('todoGroup').value }); inp.value = ''; saveTodos();
+};
+$('todoNew').addEventListener('keydown', e => { if (e.key === 'Enter') $('todoAdd').click(); });
+$('todoDefaults').onclick = () => {
+  confirmAsk('套用預設清單？（唔會刪除你已有項目）', () => {
+    const have = new Set(todos.map(o => o.t));
+    PRESET_TODOS.forEach(p => { if (!have.has(p.t)) todos.push({ t: p.t, d: 0, g: p.g }); });
+    saveTodos();
+  });
+};
+renderTodos();
+
+/* ---------- weather (4e) ---------- */
+const WX_CACHE_KEY = 'travel_wx_cache_v1';
+const WX_CODE = {
+  0:['晴朗','☀️'],1:['大致晴','🌤'],2:['間中有雲','⛅'],3:['多雲','☁️'],
+  45:['有霧','🌫'],48:['霧凇','🌫'],51:['微毛雨','🌦'],53:['毛雨','🌦'],55:['大毛雨','🌧'],
+  61:['小雨','🌧'],63:['中雨','🌧'],65:['大雨','🌧'],71:['小雪','🌨'],73:['中雪','🌨'],75:['大雪','❄️'],
+  80:['驟雨','🌦'],81:['驟雨','🌧'],82:['暴雨','⛈'],95:['雷暴','⛈'],96:['雷暴夾雹','⛈'],99:['強雷暴夾雹','⛈']
+};
+let wxCache = store.get(WX_CACHE_KEY, {});
+function wxLabel(code) { return WX_CODE[code] || ['天氣資料','🌡']; }
+async function fetchWeather() {
+  const dest = trip.destination || '九州';
+  $('wxSub').textContent = dest + ' · Open-Meteo';
+  const grid = $('wxGrid');
+  grid.innerHTML = '<div class="empty">載入緊…</div>';
+  try {
+    const geo = await (await fetch('https://geocoding-api.open-meteo.com/v1/search?name=' + encodeURIComponent(dest) + '&count=1&language=zh&format=json')).json();
+    if (!geo.results || !geo.results.length) throw new Error('no geo');
+    const { latitude: lat, longitude: lon, name } = geo.results[0];
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=16`;
+    const data = await (await fetch(url)).json();
+    const daily = data.daily;
+    const byDate = {};
+    daily.time.forEach((t, i) => {
+      byDate[t] = { hi: Math.round(daily.temperature_2m_max[i]), lo: Math.round(daily.temperature_2m_min[i]), code: daily.weathercode[i] };
+    });
+    wxCache[trip.id] = { dest: name, updated: Date.now(), byDate };
+    store.set(WX_CACHE_KEY, wxCache);
+    renderWeatherPage();
+    showDay(currentDay);
+  } catch (e) {
+    $('wxHint').textContent = '未能取得天氣，請稍後再試';
+    grid.innerHTML = '<div class="empty">天氣載入失敗，會用暫存或季節參考</div>';
+    renderWeatherPage();
+  }
+}
+function renderWeatherPage() {
+  const c = wxCache[trip.id];
+  const grid = $('wxGrid');
+  if (!c || !c.byDate) {
+    grid.innerHTML = days.map(d => `<div class="card"><div class="w-temp">${d.date.slice(5)}</div><div class="w-note">未有預報，出發前再睇</div></div>`).join('');
+    return;
+  }
+  $('wxHint').textContent = `資料來自 Open-Meteo · 更新於 ${new Date(c.updated).toLocaleString('zh-HK')}`;
+  grid.innerHTML = days.map(d => {
+    const w = c.byDate[d.date];
+    if (!w) return `<div class="card"><b>${d.date.slice(5)}</b><div class="w-note">未有預報，出發前再睇</div></div>`;
+    const [lab, icon] = wxLabel(w.code);
+    return `<div class="card"><div style="font-size:1.6rem">${icon}</div><b>${d.date.slice(5)}</b><div class="w-temp">${w.hi}° / ${w.lo}°</div><div class="w-note">${lab}</div></div>`;
+  }).join('');
+}
+function renderDayWeather(d) {
+  const wEl = $('weather');
+  const c = wxCache[trip.id];
+  const w = c && c.byDate && c.byDate[d.date];
+  if (w) {
+    const [lab, icon] = wxLabel(w.code);
+    wEl.style.display = '';
+    wEl.innerHTML = `<div class="w-ic" style="font-size:1.6rem">${icon}</div><div><div class="w-temp">${w.hi}°C <i>/ ${w.lo}°C</i></div><div class="w-note">${lab}</div></div><div class="w-right">${escH(trip.destination || '')}<small>最高 / 最低</small></div>`;
+  } else if (d.temp && d.temp.length) {
+    wEl.style.display = '';
+    wEl.innerHTML = `<div class="w-ic">${ic('cloud')}</div><div><div class="w-temp">${d.temp[0]}°C <i>/ ${d.temp[1]}°C</i></div><div class="w-note">季節參考／未有預報</div></div><div class="w-right">${escH(d.place || trip.destination || '')}<small>最高 / 最低</small></div>`;
+  } else {
+    wEl.style.display = '';
+    wEl.innerHTML = `<div class="w-ic">${ic('cloud')}</div><div><div class="w-temp">—</div><div class="w-note">未有預報，出發前再睇</div></div>`;
+  }
+}
+fetchWeather();
+
+/* ---------- settings (4f) ---------- */
+const themes = [['#D49A62','#B87D46'],['#7B8FC4','#5F74AA'],['#93C3A4','#76A788'],['#E89F9F','#CE8080'],['#B5A5D6','#9A89BE'],['#E8C86A','#CCAA48'],['#C8442F','#A43220']];
+const themeNames = ['琥珀','藍','綠','櫻花粉','紫','黃','楓葉紅'];
+function applyTheme(i) {
+  const [a, b] = themes[i];
+  const root = document.documentElement.style;
+  root.setProperty('--pri', a); root.setProperty('--pri-d', b);
+  root.setProperty('--tint', `color-mix(in srgb, ${a} 14%, #FFFBF0)`);
+  document.querySelectorAll('.sw').forEach((e, k) => e.classList.toggle('on', k === i));
+  $('themeName').textContent = '目前：' + themeNames[i];
+  setSetting('theme', i);
+}
+const swBox = $('swatches');
+themes.forEach((t, i) => { const b = document.createElement('button'); b.className = 'sw'; b.style.background = t[0]; b.setAttribute('aria-label', themeNames[i]); b.onclick = () => applyTheme(i); swBox.appendChild(b); });
+applyTheme(getSetting('theme', 6));
+
+const fs = $('fs');
+function applyFs(v) { document.documentElement.style.fontSize = v + 'px'; $('fsVal').textContent = v + 'px'; fs.value = v; setSetting('fs', v); }
+fs.oninput = () => applyFs(+fs.value);
+applyFs(getSetting('fs', 16));
+
+function applyDark(on) {
+  document.body.classList.toggle('dark', !!on);
+  $('darkTog').setAttribute('aria-pressed', on ? 'true' : 'false');
+  $('darkTog').classList.toggle('on', !!on);
+  setSetting('dark', !!on);
+}
+$('darkTog').onclick = () => applyDark($('darkTog').getAttribute('aria-pressed') !== 'true');
+applyDark(!!getSetting('dark', false));
+
+const FX = [['none','✕','無'],['sakura','🌸','櫻花'],['leaf','🍁','秋葉'],['snow','❄️','雪花']];
+const LEAF_COLORS = ['#E2762F','#C9442B','#E8A93A','#B0522A','#D98B2B'];
+const LEAF_PATH = 'M12 1.5 L14.2 6.5 L17.5 4.5 L16.8 9.5 L22 8.5 L18.6 12.6 L20.5 15 L14.6 15 L13 21.5 H11 L9.4 15 L3.5 15 L5.4 12.6 L2 8.5 L7.2 9.5 L6.5 4.5 L9.8 6.5 Z';
+const pBox = $('petals');
+function buildFx(type) {
+  pBox.innerHTML = '';
+  if (type === 'none') return;
+  if (type === 'snow') {
+    for (let i = 0; i < 18; i++) {
+      const el = document.createElement('div'), s = 8 + Math.random() * 10;
+      el.className = 'snow'; el.textContent = '❄';
+      el.style.cssText = `left:${Math.random()*100}%;font-size:${s}px;animation-duration:${10+Math.random()*10}s;animation-delay:${-Math.random()*16}s`;
+      pBox.appendChild(el);
+    }
+    return;
+  }
+  const leaf = type === 'leaf', n = leaf ? 14 : 16;
+  for (let i = 0; i < n; i++) {
+    const el = document.createElement('div'), s = leaf ? 16 + Math.random() * 12 : 8 + Math.random() * 9;
+    el.className = leaf ? 'leaf' : 'petal';
+    el.style.cssText = `left:${Math.random()*100}%;width:${s}px;height:${s}px;animation-duration:${(leaf?11:9)+Math.random()*9}s;animation-delay:${-Math.random()*16}s`;
+    if (leaf) el.innerHTML = `<svg viewBox="0 0 24 24"><path d="${LEAF_PATH}" fill="${LEAF_COLORS[i%LEAF_COLORS.length]}"/><path d="M12 20V8M12 14L8 11M12 14L16 11" stroke="rgba(255,255,255,.4)" stroke-width=".8" stroke-linecap="round" fill="none"/></svg>`;
+    pBox.appendChild(el);
+  }
+}
+let curFx = 'sakura';
+const fxGrid = $('fxGrid');
+FX.forEach(([k, e, t]) => {
+  const b = document.createElement('button');
+  b.className = 'fx'; b.dataset.k = k; b.innerHTML = `<span>${e}</span>${t}`;
+  b.onclick = () => setFx(k);
+  fxGrid.appendChild(b);
+});
+function setFx(k) {
+  curFx = k; buildFx(k);
+  fxGrid.querySelectorAll('.fx').forEach(b => b.classList.toggle('on', b.dataset.k === k));
+  setSetting('fx', k);
+}
+$('fab').onclick = () => setFx(FX[(FX.findIndex(f => f[0] === curFx) + 1) % FX.length][0]);
+const savedFx = getSetting('fx', 'leaf');
+setFx(FX.some(f => f[0] === savedFx) ? savedFx : 'leaf');
+
+/* CSS for toggle.on */
+(function(){ const s=document.createElement('style'); s.textContent=`.toggle{width:48px;height:28px;border-radius:99px;border:3px solid var(--line);background:#ddd;position:relative;flex:none}.toggle::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}.toggle.on,.toggle[aria-pressed="true"]{background:var(--pri);border-color:var(--pri)}.toggle.on::after,.toggle[aria-pressed="true"]::after{left:22px}`; document.head.appendChild(s); })();
+
+showDay(0);

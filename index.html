@@ -3,11 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>九州小旅｜11/22–11/28</title>
+<title>我的旅程</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <script defer src="app.js"></script>
 </head>
 <body>
@@ -31,12 +32,62 @@
   <div class="tm-err" id="tmErr"></div>
   <div class="tm-btns"><button class="ghost" id="tmCancel">取消</button><button class="btn" id="tmSave">儲存</button></div>
 </div></div>
-<div class="modal" id="confirmModal" hidden><div class="modal-card card"><h3>刪除旅程？</h3><p id="cfMsg"></p><div class="tm-btns"><button class="ghost" id="cfNo">取消</button><button class="btn danger" id="cfYes">刪除</button></div></div></div>
+<div class="modal" id="confirmModal" hidden><div class="modal-card card"><h3 id="cfTitle">確認</h3><p id="cfMsg"></p><div class="tm-btns"><button class="ghost" id="cfNo">取消</button><button class="btn danger" id="cfYes">確認</button></div></div></div>
 <div class="modal" id="stkModal" hidden><div class="modal-card card"><h3>選擇貼紙</h3><div class="stk-grid" id="stkGrid"></div><p class="hint" style="margin:8px 0 0">單擊拖動・雙擊旋轉・撳 × 刪除</p><div class="tm-btns"><button class="ghost" id="stkClose">完成</button></div></div></div>
+
+<div class="modal" id="actModal" hidden><div class="modal-card card sheet">
+  <h3 id="amTitle">新增活動</h3>
+  <div class="type-row" id="amTypes"></div>
+  <label class="tog-row"><span>🔔 提醒</span><button type="button" class="toggle" id="amRemind" aria-pressed="false"></button></label>
+  <label>名稱／地點<input class="fld" id="amText" maxlength="60" placeholder="例如 一蘭拉麵"></label>
+  <div class="tm-row"><label>時間<input class="fld" id="amTime" placeholder="例如 12:30"></label><label>門票價<input class="fld" id="amTicket" type="number" inputmode="decimal" placeholder="0"></label></div>
+  <label>營業時間<input class="fld" id="amHours" maxlength="40" placeholder="例如 10:00–21:00"></label>
+  <label>預計花費（旅程貨幣）<input class="fld" id="amCost" type="number" inputmode="decimal" placeholder="0"></label>
+  <label>特色<input class="fld" id="amFeat" maxlength="60" placeholder="例如 必食、夜景"></label>
+  <label>備註<input class="fld" id="amNote" maxlength="80" placeholder="可選"></label>
+  <label>地圖關鍵字<input class="fld" id="amMap" maxlength="60" placeholder="Google 地圖搜尋字"></label>
+  <div class="tm-err" id="amErr"></div>
+  <div class="tm-btns"><button class="ghost" id="amCancel">取消</button><button class="btn" id="amSave">儲存</button></div>
+</div></div>
+
+<div class="modal" id="dirModal" hidden><div class="modal-card card sheet">
+  <h3>交通路線</h3>
+  <p class="dir-from" id="dirFrom"></p>
+  <p class="dir-arrow">↓</p>
+  <p class="dir-to" id="dirTo"></p>
+  <a class="btn" id="dirGo" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;margin-top:14px">用 Google 地圖睇交通</a>
+  <div class="tm-btns"><button class="ghost" id="dirClose">關閉</button></div>
+</div></div>
+
+<div class="modal" id="bkModal" hidden><div class="modal-card card sheet">
+  <h3 id="bkTitle">新增機票</h3>
+  <div id="bkFlightFields">
+    <label>航班編號<input class="fld" id="bkFlightNo" maxlength="12" placeholder="例如 UO638"></label>
+    <div class="tm-row"><label>出發機場<input class="fld" id="bkFrom" maxlength="8" placeholder="HKG"></label><label>抵達機場<input class="fld" id="bkTo" maxlength="8" placeholder="FUK"></label></div>
+    <div class="tm-row"><label>起飛時間<input class="fld" id="bkDep" placeholder="12:55"></label><label>抵達時間<input class="fld" id="bkArr" placeholder="17:00"></label></div>
+    <label>日期<input class="fld" type="date" id="bkDate"></label>
+  </div>
+  <div id="bkStayFields" hidden>
+    <label>酒店名稱<input class="fld" id="bkName" maxlength="60" placeholder="酒店名"></label>
+    <div class="tm-row"><label>入住<input class="fld" type="date" id="bkIn"></label><label>退房<input class="fld" type="date" id="bkOut"></label></div>
+    <label>地址<input class="fld" id="bkAddr" maxlength="80" placeholder="地址"></label>
+    <label>地圖關鍵字<input class="fld" id="bkQ" maxlength="60" placeholder="Google 地圖搜尋"></label>
+  </div>
+  <label>預約名稱／備註<input class="fld" id="bkNote" maxlength="80" placeholder="可選"></label>
+  <div class="tm-row"><label>金額<input class="fld" id="bkAmt" type="number" inputmode="decimal" placeholder="0"></label><label>分攤人數<input class="fld" id="bkPeople" type="number" min="1" value="1"></label></div>
+  <div class="photo-pick">
+    <label for="bkFile">📎 上載 PDF／相片</label>
+    <input type="file" id="bkFile" accept="image/*,application/pdf" hidden>
+    <label for="bkCam">📷 影相</label>
+    <input type="file" id="bkCam" accept="image/*" capture="environment" hidden>
+    <span id="bkFileNote">未上載</span>
+  </div>
+  <div class="tm-err" id="bkErr"></div>
+  <div class="tm-btns"><button class="ghost" id="bkCancel">取消</button><button class="btn" id="bkSave">儲存</button></div>
+</div></div>
 
 <main>
   <button class="back-btn" id="backHome" aria-label="返回我的旅程">‹ 我的旅程</button>
-  <!-- 行程 -->
   <section class="view active" id="v-trip">
     <div class="card count">
       <div class="count-top">
@@ -46,53 +97,50 @@
       </div>
       <div class="count-foot" id="cdFoot"></div>
     </div>
-
+    <div class="day-tools"><button class="ghost sm" id="addDayBtn">＋ 新增日</button><button class="ghost sm danger-text" id="delDayBtn">刪除今日</button></div>
     <div class="chips" id="chips"></div>
     <div class="card weather" id="weather"></div>
     <div class="card" id="dayCard"></div>
   </section>
 
-  <!-- 預約 -->
   <section class="view" id="v-book">
     <div class="page-head">
       <h1 class="page">預約管理</h1>
       <div class="page-sub">機票、住宿</div>
       <div class="sticker bob" style="width:132px;height:84px;top:-14px;" id="stk-top"></div>
     </div>
-
-    <div class="sec-h"><svg class="ic" viewBox="0 0 24 24" id="ic-plane1"></svg>機票<span class="pill-count" id="flightCount">2</span></div>
-
-    <div id="flightList"></div>
-
-    <div class="sec-h" style="margin-top:34px"><svg class="ic" viewBox="0 0 24 24" id="ic-bed1"></svg>住宿<span class="pill-count" id="stayCount">3</span></div>
-
-    <div id="stayList"></div>
-    <p class="hint">黑川為日歸，無需過夜</p>
+    <div class="tabs" id="bkTabs">
+      <button class="tab on" data-bk="all">全部</button>
+      <button class="tab" data-bk="flight">機票</button>
+      <button class="tab" data-bk="stay">住宿</button>
+    </div>
+    <div class="add-row" style="margin-bottom:14px">
+      <button class="btn" id="addFlight" style="flex:1">＋ 新增機票</button>
+      <button class="btn" id="addStay" style="flex:1">＋ 新增住宿</button>
+    </div>
+    <div id="bookAll"></div>
   </section>
 
-  <!-- 預算 -->
   <section class="view" id="v-budget">
     <div class="bud-head">
       <div><h1 class="page">旅行預算</h1><div class="page-sub" style="margin:0">追蹤支出與預算</div></div>
       <div class="sticker bob" style="width:88px;height:88px;flex:none" id="stk-bud"></div>
       <button class="ghost" id="setBudBtn"><svg class="ic" viewBox="0 0 24 24" data-i="gear"></svg>設置預算</button>
     </div>
-
     <div class="card" id="budPanel" hidden>
-      <div class="sec-title">總預算（HKD）</div>
+      <div class="sec-title" id="budCurLab">總預算（HKD）</div>
       <div class="add-row" style="margin-top:0"><input class="fld" id="budIn" type="number" inputmode="decimal" placeholder="例如 20000" style="flex:1"><button class="btn" id="budSave">儲存</button></div>
+      <label class="tog-row" style="margin-top:12px"><span>自動併入行程花費</span><button type="button" class="toggle" id="autoMerge" aria-pressed="false"></button></label>
     </div>
-
     <div class="card">
-      <div class="rate-top"><span>匯率計算機</span><label>1 JPY ≈ <input class="fld" id="rateIn" type="number" step="0.0001" inputmode="decimal"> HKD</label></div>
+      <div class="rate-top"><span>匯率計算機</span><label>1 <span id="rateCur">JPY</span> ≈ <input class="fld" id="rateIn" type="number" step="0.0001" inputmode="decimal"> HKD</label></div>
       <div class="rate-row">
-        <input class="fld" id="jpy" type="number" inputmode="decimal" placeholder="0"><span class="cur">JPY</span>
+        <input class="fld" id="jpy" type="number" inputmode="decimal" placeholder="0"><span class="cur" id="curLeft">JPY</span>
         <span class="arr">⇄</span>
         <input class="fld out" id="hkd" type="number" inputmode="decimal" placeholder="0"><span class="cur">HKD</span>
       </div>
       <div class="rate-note"><button id="rateUpd" style="color:var(--pri);font-weight:700;text-decoration:underline dotted;text-underline-offset:4px">更新匯率</button> <span id="rateNote">匯率可手動修改</span></div>
     </div>
-
     <div class="card sum" id="sumCard">
       <div class="row">
         <div><div class="lab">總預算</div><div class="big" id="sumTotal">$0</div></div>
@@ -101,15 +149,13 @@
       <div class="track"><div class="bar" id="sumBar"></div></div>
       <div class="left"><span id="sumLeftLab">剩餘額度</span><b id="sumLeft">—</b></div>
     </div>
-
     <div class="card"><div class="sec-title">分類支出</div><div id="catList"></div></div>
-
     <div class="exp-head"><b>支出記錄</b><select class="fld" id="expFilter"></select><button class="btn sm" id="expToggle">＋ 新增</button></div>
     <div class="card" id="expPanel" hidden>
       <div class="form-grid">
         <input class="fld" id="expName" placeholder="項目（例如 一蘭拉麵）" maxlength="30">
         <input class="fld" id="expAmt" type="number" inputmode="decimal" placeholder="金額">
-        <select class="fld" id="expCur"><option>JPY</option><option>HKD</option></select>
+        <select class="fld" id="expCur"></select>
         <select class="fld" id="expCat"></select>
       </div>
       <button class="btn" id="expAdd" style="width:100%;margin-top:12px">加入記錄</button>
@@ -117,77 +163,74 @@
     <div class="card" id="expList"></div>
   </section>
 
-  <!-- 購物 -->
-  <section class="view" id="v-shop">
-    <div class="bud-head">
-      <div><h1 class="page">購物清單</h1><div class="page-sub" style="margin:0">記錄想買的東西</div></div>
-      <div class="sticker bob" style="width:104px;height:104px;flex:none" id="stk-shop"></div>
-      <button class="btn" id="spToggle">＋ 新增</button>
-    </div>
-
-    <div class="stats">
-      <div class="card stat"><div><div class="num" id="spTodo">0</div><div class="lab">待購買</div></div><div id="pgirl" class="sticker fig"></div></div>
-      <div class="card stat"><div><div class="num" id="spDone">0</div><div class="lab">已購買</div></div><div id="pboy" class="sticker fig"></div></div>
-    </div>
-
-    <div class="card" id="spPanel" hidden>
-      <div class="form-grid">
-        <input class="fld" id="spName" placeholder="想買咩？（例如 保暖襪）" maxlength="40">
-        <input class="fld" id="spNote" placeholder="備註／邊度買（例如 Donki）" maxlength="40" style="grid-column:1/-1">
-        <select class="fld" id="spCat"></select>
-        <select class="fld" id="spPri"><option value="0">一般</option><option value="1">重要</option></select>
-      </div>
-      <div class="photo-pick"><label for="spImg">📷 加相</label><input type="file" id="spImg" accept="image/*" hidden><img id="spPrev" alt="" hidden><span id="spImgNote">可選，會自動縮細</span></div>
-      <button class="btn" id="spAdd" style="width:100%;margin-top:14px">加入清單</button>
-    </div>
-
-    <div class="sh-head"><b>待購買</b><select class="fld" id="spFilter" style="padding:6px 10px;border-radius:14px;font-size:.88rem"></select></div>
-    <div id="spList"></div>
-    <div class="sh-head" style="margin-top:26px"><b>已購買</b></div>
-    <div id="spDoneList"></div>
-  </section>
-
-  <!-- 準備 -->
-  <section class="view" id="v-todo">
+  <section class="view" id="v-list">
     <div class="page-head">
-      <h1 class="page">出發前準備</h1>
-      <div class="page-sub">一項一項打剔</div>
-      <div class="sticker bob" style="width:96px;height:96px;top:-8px;" id="stk-todo"></div>
+      <h1 class="page">清單</h1>
+      <div class="page-sub">購物同出發前準備</div>
+      <div class="sticker bob" style="width:96px;height:96px;top:-8px;" id="stk-list"></div>
     </div>
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;font-weight:700;margin-bottom:8px"><span>完成進度</span><span id="todoPct" style="color:var(--pri)">0%</span></div>
-      <div class="track" style="margin:0 0 10px"><div class="bar" id="todoBar"></div></div>
-      <div id="todoList"></div>
-      <div class="add-row"><input id="todoNew" placeholder="新增自訂項目…" maxlength="40"><button class="btn" id="todoAdd">新增</button></div>
+    <div class="tabs" id="listTabs">
+      <button class="tab on" data-list="shop">購物清單</button>
+      <button class="tab" data-list="todo">待辦</button>
+    </div>
+    <div id="listShop">
+      <div class="bud-head" style="margin-bottom:12px">
+        <div class="stats" style="flex:1;margin:0">
+          <div class="card stat"><div><div class="num" id="spTodo">0</div><div class="lab">待購買</div></div></div>
+          <div class="card stat"><div><div class="num" id="spDone">0</div><div class="lab">已購買</div></div></div>
+        </div>
+        <button class="btn" id="spToggle">＋ 新增</button>
+      </div>
+      <div class="card" id="spPanel" hidden>
+        <div class="form-grid">
+          <input class="fld" id="spName" placeholder="想買咩？" maxlength="40">
+          <input class="fld" id="spNote" placeholder="備註／邊度買" maxlength="40" style="grid-column:1/-1">
+          <select class="fld" id="spCat"></select>
+          <select class="fld" id="spPri"><option value="0">一般</option><option value="1">重要</option><option value="2">必買</option></select>
+        </div>
+        <div class="photo-pick"><label for="spImg">📷 加相</label><input type="file" id="spImg" accept="image/*" hidden><img id="spPrev" alt="" hidden><span id="spImgNote">可選</span></div>
+        <button class="btn" id="spAdd" style="width:100%;margin-top:14px">加入清單</button>
+      </div>
+      <div class="sh-head"><b>待購買</b><select class="fld" id="spFilter" style="padding:6px 10px;border-radius:14px;font-size:.88rem"></select></div>
+      <div id="spList"></div>
+      <div class="sh-head" style="margin-top:26px"><b>已購買</b></div>
+      <div id="spDoneList"></div>
+    </div>
+    <div id="listTodo" hidden>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-weight:700;margin-bottom:8px;gap:8px;flex-wrap:wrap">
+          <span>完成進度</span><span id="todoPct" style="color:var(--pri)">0%</span>
+          <button class="ghost sm" id="todoDefaults">套用預設清單</button>
+        </div>
+        <div class="track" style="margin:0 0 10px"><div class="bar" id="todoBar"></div></div>
+        <div id="todoList"></div>
+        <div class="add-row"><select class="fld" id="todoGroup" style="flex:none;width:110px"><option value="pre">出發前</option><option value="visa">簽證</option><option value="insurance">保險</option></select><input id="todoNew" class="fld" placeholder="新增自訂項目…" maxlength="40" style="flex:1"><button class="btn" id="todoAdd">新增</button></div>
+      </div>
     </div>
   </section>
 
-  <!-- 天氣 -->
   <section class="view" id="v-weather">
     <div class="page-head">
       <h1 class="page">天氣參考</h1>
-      <div class="page-sub">秋末氣溫約數，出發前再查預報</div>
+      <div class="page-sub" id="wxSub">以目的地查預報</div>
     </div>
-    <div class="wgrid">
-      <div class="card"><h3>熊本</h3><div class="d">11/22 – 11/24</div><div class="t">12–18°C</div><p>早晚較涼，帶薄外套</p></div>
-      <div class="card"><h3>黑川溫泉</h3><div class="d">11/23 日歸</div><div class="t">8–15°C</div><p>山區較涼，溫泉後要保暖</p></div>
-      <div class="card"><h3>長崎</h3><div class="d">11/24 – 11/26</div><div class="t">13–19°C</div><p>海邊風大，帶外套</p></div>
-      <div class="card"><h3>福岡</h3><div class="d">11/26 – 11/28</div><div class="t">12–18°C</div><p>市區散策啱，留意早晚溫差</p></div>
-    </div>
-    <p class="hint">建議出發前十日再睇 Yahoo 天氣 / 氣象廳</p>
+    <div class="wgrid" id="wxGrid"></div>
+    <p class="hint" id="wxHint">資料來自 Open-Meteo</p>
   </section>
 
-  <!-- 設定 -->
   <section class="view" id="v-set">
     <div class="page-head"><h1 class="page">設定</h1><div class="page-sub">自己調一調個樣</div></div>
     <div class="card">
-      <div class="set-h"><div class="ci"><svg class="ic" viewBox="0 0 24 24" id="ic-palette"></svg></div><div><b>主題顏色</b><small>選擇你喜歡的顏色</small></div></div>
+      <div class="set-h"><div class="ci"><svg class="ic" viewBox="0 0 24 24" id="ic-palette"></svg></div><div><b>主題顏色</b><small>揀色即時套用</small></div></div>
       <div class="swatches" id="swatches"></div>
       <div class="theme-name" id="themeName"></div>
     </div>
     <div class="card">
       <div class="set-h"><div class="ci" style="font-weight:800;font-size:1.3rem">T</div><div><b>字體大小</b><small id="fsVal">16px</small></div></div>
       <input type="range" id="fs" min="14" max="20" value="16">
+    </div>
+    <div class="card">
+      <div class="set-h"><div class="ci">🌙</div><div><b>深色模式</b><small>奶油底轉深啡底</small></div><button type="button" class="toggle" id="darkTog" aria-pressed="false"></button></div>
     </div>
     <div class="card">
       <div class="set-h"><div class="ci"><svg class="ic" viewBox="0 0 24 24" id="ic-spark"></svg></div><div><b>飄落特效</b><small>選擇背景動畫效果</small></div></div>
@@ -203,12 +246,9 @@
   <button data-v="v-trip" class="active"><svg class="ic" viewBox="0 0 24 24" data-i="cal"></svg>行程</button>
   <button data-v="v-book"><svg class="ic" viewBox="0 0 24 24" data-i="ticket"></svg>預約</button>
   <button data-v="v-budget"><svg class="ic" viewBox="0 0 24 24" data-i="wallet"></svg>預算</button>
-  <button data-v="v-shop"><svg class="ic" viewBox="0 0 24 24" data-i="bag"></svg>購物</button>
-  <button data-v="v-todo"><svg class="ic" viewBox="0 0 24 24" data-i="check"></svg>準備</button>
+  <button data-v="v-list"><svg class="ic" viewBox="0 0 24 24" data-i="bag"></svg>清單</button>
   <button data-v="v-weather"><svg class="ic" viewBox="0 0 24 24" data-i="cloud"></svg>天氣</button>
   <button data-v="v-set"><svg class="ic" viewBox="0 0 24 24" data-i="gear"></svg>設定</button>
 </nav>
-
-
 </body>
 </html>
