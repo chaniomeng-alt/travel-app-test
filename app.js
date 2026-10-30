@@ -1092,8 +1092,8 @@ const trip = getTrip();
 let days = trip.days;
 if (!trip.budget) trip.budget = { total: 0, rate: 0.052, expenses: [] };
 if (!trip.bookings) trip.bookings = { flights: [], stays: [] };
-(trip.bookings.flights || []).forEach(f => { if (!f.id) f.id = uid('f'); if (f.people == null) f.people = 1; if (f.amount == null) f.amount = 0; if (!f.fileId) f.fileId = ''; });
-(trip.bookings.stays || []).forEach(s => { if (!s.id) s.id = uid('s'); if (s.people == null) s.people = 1; if (s.amount == null) s.amount = 0; if (!s.fileId) s.fileId = ''; if (!s.q) s.q = s.name || ''; });
+(trip.bookings.flights || []).forEach(f => { if (!f.id) f.id = uid('f'); if (f.people == null) f.people = 1; if (f.amount == null) f.amount = 0; if (!f.fileId) f.fileId = ''; if (!f.fileStoragePath) f.fileStoragePath = ''; if (!f.fileDownloadURL) f.fileDownloadURL = ''; if (!f.fileName) f.fileName = ''; if (!f.fileMime) f.fileMime = ''; if (f.fileSize == null) f.fileSize = 0; });
+(trip.bookings.stays || []).forEach(s => { if (!s.id) s.id = uid('s'); if (s.people == null) s.people = 1; if (s.amount == null) s.amount = 0; if (!s.fileId) s.fileId = ''; if (!s.fileStoragePath) s.fileStoragePath = ''; if (!s.fileDownloadURL) s.fileDownloadURL = ''; if (!s.fileName) s.fileName = ''; if (!s.fileMime) s.fileMime = ''; if (s.fileSize == null) s.fileSize = 0; if (!s.q) s.q = s.name || ''; });
 
 /* ---------- IndexedDB for booking files ---------- */
 const IDB_NAME = 'travel_app_files', IDB_STORE = 'files';
@@ -1137,6 +1137,111 @@ async function idbDel(key) {
     tx.oncomplete = () => res();
     tx.onerror = () => rej(tx.error);
   });
+}
+
+/* ---------- Firebase Storage booking attachments ---------- */
+const BK_FILE_MAX_BYTES = 8 * 1024 * 1024; /* ~8MB soft limit (Storage rules hard-cap 10MB) */
+function bookingHasFile(b) {
+  return !!(b && (b.fileId || b.fileStoragePath || b.fileDownloadURL));
+}
+function bookingStoragePath(tripId, bookingId, fileId) {
+  return 'trips/' + tripId + '/bookings/' + bookingId + '/' + (fileId || 'file');
+}
+async function ensureTripDocForStorage(t) {
+  if (!fbDb || !cloudUser || !t || !t.id) return false;
+  const uid = cloudUser.uid;
+  const ownerUid = t.cloudOwnerUid || uid;
+  let memberUids = Array.isArray(t.memberUids) ? t.memberUids.slice() : [];
+  if (!memberUids.includes(ownerUid)) memberUids.unshift(ownerUid);
+  if (!memberUids.includes(uid)) memberUids.push(uid);
+  memberUids = [...new Set(memberUids.filter(Boolean))];
+  t.cloudOwnerUid = ownerUid;
+  t.memberUids = memberUids;
+  const payload = {
+    ownerUid,
+    memberUids,
+    updatedAt: t.updatedAt || Date.now(),
+    trip: JSON.parse(JSON.stringify(t))
+  };
+  await fbDb.collection('trips').doc(t.id).set(payload);
+  return true;
+}
+async function deleteBookingCloudFile(storagePath) {
+  if (!storagePath || !fbStorage || !cloudUser) return;
+  try {
+    await fbStorage.ref().child(storagePath).delete();
+  } catch (e) {
+    console.warn('[storage] delete', e);
+  }
+}
+async function uploadBookingCloudFile(booking, tripObj) {
+  const t = tripObj || (typeof trip !== 'undefined' ? trip : null) || (typeof getTrip === 'function' ? getTrip() : null);
+  if (!booking || !booking.fileId || !fbStorage || !cloudUser || !t) return false;
+  let blob = null;
+  try { blob = await idbGet(booking.fileId); } catch (e) { return false; }
+  if (!blob) return false;
+  try {
+    await ensureTripDocForStorage(t);
+  } catch (e) {
+    console.warn('[storage] ensure trip', e);
+    return false;
+  }
+  const path = bookingStoragePath(t.id, booking.id, booking.fileId);
+  try {
+    const ref = fbStorage.ref().child(path);
+    await ref.put(blob, { contentType: blob.type || booking.fileMime || 'application/octet-stream' });
+    let url = '';
+    try { url = await ref.getDownloadURL(); } catch (e) {}
+    if (booking.fileStoragePath && booking.fileStoragePath !== path) {
+      await deleteBookingCloudFile(booking.fileStoragePath);
+    }
+    booking.fileStoragePath = path;
+    booking.fileDownloadURL = url || booking.fileDownloadURL || '';
+    if (!booking.fileMime && blob.type) booking.fileMime = blob.type;
+    if (!booking.fileSize && blob.size) booking.fileSize = blob.size;
+    return true;
+  } catch (e) {
+    console.warn('[storage] upload', e);
+    return false;
+  }
+}
+async function flushPendingBookingUploads(silent) {
+  if (!fbStorage || !cloudUser || !APP || !APP.trips) return 0;
+  let n = 0;
+  for (const t of APP.trips) {
+    if (!t || !t.bookings) continue;
+    const lists = [t.bookings.flights || [], t.bookings.stays || []];
+    let touched = false;
+    for (const list of lists) {
+      for (const b of list) {
+        if (!b || !b.fileId || b.fileStoragePath) continue;
+        let local = null;
+        try { local = await idbGet(b.fileId); } catch (e) {}
+        if (!local) continue;
+        const ok = await uploadBookingCloudFile(b, t);
+        if (ok) { n++; touched = true; }
+      }
+    }
+    if (touched) saveTrip(t);
+  }
+  if (n && !silent) toast('已上載 ' + n + ' 個預約附件到雲端');
+  return n;
+}
+async function applyLocalBookingFile(o, file) {
+  if (!file) return o;
+  if (file.size > BK_FILE_MAX_BYTES) {
+    throw new Error('檔案太大（上限約 8MB）');
+  }
+  const fileId = o.id + '_file';
+  if (o.fileStoragePath) await deleteBookingCloudFile(o.fileStoragePath);
+  await idbPut(fileId, file);
+  o.fileId = fileId;
+  o.fileName = file.name || '';
+  o.fileMime = file.type || '';
+  o.fileSize = file.size || 0;
+  o.fileStoragePath = '';
+  o.fileDownloadURL = '';
+  return o;
 }
 
 /* ---------- itinerary (4a) ---------- */
@@ -1230,8 +1335,6 @@ function showDay(i) {
   const d = days[i];
   // weather slot filled by 4e
   renderDayWeather(d);
-  const spend = daySpend(d);
-  const cur = trip.currency || 'JPY';
   document.getElementById('dayCard').innerHTML = `
     <div class="day-head">
       <div>
@@ -1241,7 +1344,6 @@ function showDay(i) {
       </div>
       <div class="sticker bob" style="width:112px;height:112px;flex:none;margin-top:-6px">${stkHTML(dayDecorKey(trip, d, i))}</div>
     </div>
-    <div class="day-spend"><span>今日預計花費</span><b>${spend ? spend.toLocaleString('en-US') + ' ' + cur : '—'}</b></div>
     ${d.hotel ? `<a class="hotel" href="${gmap(d.hq || d.hotel)}" target="_blank" rel="noopener">${ic('bed')}<span>${escH(d.hotel)}</span>${ic('pin')}</a>` : ''}
     <div class="sec-title">活動安排 <span style="font-size:.8rem;color:var(--soft);font-weight:500">（可新增／編輯／拖動）</span></div>
     <div id="actList"></div>
@@ -1700,7 +1802,7 @@ function openBkModal(kind, edit) {
   $('bkFlightFields').hidden = kind !== 'flight';
   $('bkStayFields').hidden = kind !== 'stay';
   $('bkErr').textContent = '';
-  $('bkFileNote').textContent = edit && edit.fileId ? '已上載 PDF／相片' : '未上載';
+  $('bkFileNote').textContent = edit && bookingHasFile(edit) ? ('已上載' + (edit.fileStoragePath ? '（已同步雲端）' : '（本機；儲存／同步後上雲）')) : '未上載';
   $('bkNote').value = edit ? (edit.note || edit.meta || '') : '';
   $('bkAmt').value = edit && edit.amount ? edit.amount : '';
   $('bkPeople').value = edit && edit.people ? edit.people : 1;
@@ -1723,13 +1825,22 @@ function openBkModal(kind, edit) {
 }
 async function handleBkFile(file) {
   if (!file) return;
+  if (file.size > BK_FILE_MAX_BYTES) {
+    bkPendingFile = null;
+    $('bkFileNote').textContent = '檔案太大（上限約 8MB）';
+    toast('附件上限約 8MB，請壓縮後再上載');
+    return;
+  }
   bkPendingFile = file;
-  $('bkFileNote').textContent = file.type.includes('pdf') ? '已選 PDF（儲存時寫入）' : '已選相片（儲存時寫入）';
+  const kind = (file.type || '').includes('pdf') ? 'PDF' : '相片';
+  $('bkFileNote').textContent = '已選 ' + kind + '（儲存時寫入；登入後同步雲端）';
 }
 $('bkFile').onchange = e => { handleBkFile(e.target.files[0]); e.target.value = ''; };
 $('bkCam').onchange = e => { handleBkFile(e.target.files[0]); e.target.value = ''; };
 $('bkCancel').onclick = () => { $('bkModal').hidden = true; };
 $('bkSave').onclick = async () => {
+  let saved = null;
+  const wantUpload = !!bkPendingFile;
   if (bkKind === 'flight') {
     const flightNo = $('bkFlightNo').value.trim(), from = $('bkFrom').value.trim().toUpperCase(), to = $('bkTo').value.trim().toUpperCase();
     if (!flightNo || !from || !to) return $('bkErr').textContent = '請填航班編號同機場';
@@ -1746,15 +1857,21 @@ $('bkSave').onclick = async () => {
       people: peopleN,
       memberIds,
       guest: guestLabelFromIds(memberIds) || (bkEdit && bkEdit.guest) || '',
-      fileId: bkEdit ? (bkEdit.fileId || '') : ''
+      fileId: bkEdit ? (bkEdit.fileId || '') : '',
+      fileStoragePath: bkEdit ? (bkEdit.fileStoragePath || '') : '',
+      fileDownloadURL: bkEdit ? (bkEdit.fileDownloadURL || '') : '',
+      fileName: bkEdit ? (bkEdit.fileName || '') : '',
+      fileMime: bkEdit ? (bkEdit.fileMime || '') : '',
+      fileSize: bkEdit ? (bkEdit.fileSize || 0) : 0
     };
     if (bkPendingFile) {
-      o.fileId = o.id + '_file';
-      await idbPut(o.fileId, bkPendingFile);
+      try { await applyLocalBookingFile(o, bkPendingFile); }
+      catch (e) { return $('bkErr').textContent = (e && e.message) || '附件寫入失敗'; }
     }
     const arr = trip.bookings.flights;
     const ix = arr.findIndex(x => x.id === o.id);
     if (ix >= 0) arr[ix] = o; else arr.push(o);
+    saved = o;
   } else {
     const name = $('bkName').value.trim();
     if (!name) return $('bkErr').textContent = '請填酒店名稱';
@@ -1773,19 +1890,33 @@ $('bkSave').onclick = async () => {
       people: peopleN,
       memberIds,
       guest: guestLabelFromIds(memberIds) || (bkEdit && bkEdit.guest) || '',
-      fileId: bkEdit ? (bkEdit.fileId || '') : ''
+      fileId: bkEdit ? (bkEdit.fileId || '') : '',
+      fileStoragePath: bkEdit ? (bkEdit.fileStoragePath || '') : '',
+      fileDownloadURL: bkEdit ? (bkEdit.fileDownloadURL || '') : '',
+      fileName: bkEdit ? (bkEdit.fileName || '') : '',
+      fileMime: bkEdit ? (bkEdit.fileMime || '') : '',
+      fileSize: bkEdit ? (bkEdit.fileSize || 0) : 0
     };
     o.dates = stayDatesLabel(o);
     if (bkPendingFile) {
-      o.fileId = o.id + '_file';
-      await idbPut(o.fileId, bkPendingFile);
+      try { await applyLocalBookingFile(o, bkPendingFile); }
+      catch (e) { return $('bkErr').textContent = (e && e.message) || '附件寫入失敗'; }
     }
     const arr = trip.bookings.stays;
     const ix = arr.findIndex(x => x.id === o.id);
     if (ix >= 0) arr[ix] = o; else arr.push(o);
+    saved = o;
   }
   saveTrip(trip); $('bkModal').hidden = true; renderBookings();
+  if (wantUpload && saved && cloudUser) {
+    void (async () => {
+      const ok = await uploadBookingCloudFile(saved);
+      if (ok) { saveTrip(trip); renderBookings(); toast('附件已同步到雲端'); }
+      else toast('附件已存本機；請保持登入，稍後「立即同步」會再試上雲');
+    })();
+  }
 };
+
 $('addFlight').onclick = () => openBkModal('flight', null);
 $('addStay').onclick = () => openBkModal('stay', null);
 document.querySelectorAll('#bkTabs .tab').forEach(b => b.onclick = () => {
@@ -1803,21 +1934,52 @@ function closeFileView() {
     bkFileObjectUrl = '';
   }
 }
-async function openBkFile(fileId) {
-  if (!fileId) return alert('未有上載檔案');
+async function openBkFile(entry) {
+  const meta = (entry && typeof entry === 'object') ? entry : { fileId: entry || '' };
+  const fileId = meta.fileId || '';
+  if (!fileId && !meta.fileStoragePath && !meta.fileDownloadURL) return alert('未有上載檔案');
   let blob = null;
-  try { blob = await idbGet(fileId); } catch (e) { return alert('讀取檔案失敗'); }
-  if (!blob) return alert('搵唔到上載檔案（附件只存本機；換機或清資料後要重新上載）');
-  const mime = String(blob.type || '').toLowerCase();
+  if (fileId) {
+    try { blob = await idbGet(fileId); } catch (e) { /* try cloud next */ }
+  }
+  if (!blob && meta.fileStoragePath && fbStorage && cloudUser) {
+    try {
+      const url = await fbStorage.ref().child(meta.fileStoragePath).getDownloadURL();
+      const res = await fetch(url);
+      if (res.ok) blob = await res.blob();
+    } catch (e) { console.warn('[storage] open path', e); }
+  }
+  if (!blob && meta.fileDownloadURL) {
+    try {
+      const res = await fetch(meta.fileDownloadURL);
+      if (res.ok) blob = await res.blob();
+    } catch (e) { console.warn('[storage] open url', e); }
+  }
+  if (!blob && fileId && fbStorage && cloudUser && trip) {
+    /* legacy: try conventional path even if metadata missing */
+    try {
+      const guess = bookingStoragePath(trip.id, String(fileId).replace(/_file$/, ''), fileId);
+      const url = await fbStorage.ref().child(guess).getDownloadURL();
+      const res = await fetch(url);
+      if (res.ok) blob = await res.blob();
+    } catch (e) {}
+  }
+  if (blob && fileId) {
+    try { await idbPut(fileId, blob); } catch (e) {}
+  }
+  if (!blob) {
+    if (!cloudUser) return alert('搵唔到上載檔案。請先登入雲端帳號，或喺原本上載嗰部機開啟後再同步。');
+    return alert('搵唔到上載檔案（雲端亦未有）。請喺原本上載嗰部機開啟 App 並「立即同步」。');
+  }
+  const mime = String(blob.type || meta.fileMime || '').toLowerCase();
   const url = URL.createObjectURL(blob);
   if (bkFileObjectUrl) { try { URL.revokeObjectURL(bkFileObjectUrl); } catch (e) {} }
   bkFileObjectUrl = url;
   const body = $('fileViewBody');
   const title = $('fileViewTitle');
   if (!body || !$('fileViewModal')) {
-    /* fallback if modal missing */
     const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener';
-    a.download = 'booking-file'; document.body.appendChild(a); a.click(); a.remove();
+    a.download = meta.fileName || 'booking-file'; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) {} }, 60000);
     return;
   }
@@ -1848,7 +2010,8 @@ async function openBkFile(fileId) {
     else if (mime.includes('webp')) ext = '.webp';
     else if (mime.includes('gif')) ext = '.gif';
     else if (isImg) ext = '.jpg';
-    dl.download = 'booking-file' + ext;
+    const base = (meta.fileName || 'booking-file').replace(/\.[^.]+$/, '');
+    dl.download = base + ext;
   }
   $('fileViewModal').hidden = false;
 }
@@ -1881,10 +2044,10 @@ function renderBookings() {
         <div class="pass-foot"><div>航班編號<b>${escH(f.flightNo)}</b></div><div style="text-align:right">日期<b>${fmtBkDate(f.date)}</b></div></div>
         ${f.note ? `<div class="pass-note">${escH(f.note)}</div>` : ''}
         ${bkPeopleNote(f)}
-        ${f.fileId ? `<button type="button" class="file-badge" data-a="file">已上載 PDF／相片 · 撳睇</button>` : ''}
+        ${bookingHasFile(f) ? `<button type="button" class="file-badge" data-a="file">已上載 PDF／相片 · 撳睇${f.fileStoragePath ? '' : '（待上雲）'}</button>` : ''}
         <div class="bk-actions">
           <button class="ghost sm" data-a="edit">編輯</button>
-          ${f.fileId ? `<button class="ghost sm" data-a="file">睇檔案</button>` : ''}
+          ${bookingHasFile(f) ? `<button class="ghost sm" data-a="file">睇檔案</button>` : ''}
           <button class="ghost sm danger-text" data-a="del">刪除</button>
         </div>
       </div>`;
@@ -1899,10 +2062,10 @@ function renderBookings() {
         <div class="stay-meta">${escH(s.addr || s.meta || s.note || '')}</div>
         <a class="maplink" href="${escH(gmap(s.q || s.name))}" target="_blank" rel="noopener">${ic('pin')}Google 地圖</a>
         ${bkPeopleNote(s, ' style="margin-top:8px"')}
-        ${s.fileId ? `<button type="button" class="file-badge" data-a="file">已上載 PDF／相片 · 撳睇</button>` : ''}
+        ${bookingHasFile(s) ? `<button type="button" class="file-badge" data-a="file">已上載 PDF／相片 · 撳睇${s.fileStoragePath ? '' : '（待上雲）'}</button>` : ''}
         <div class="bk-actions">
           <button class="ghost sm" data-a="edit">編輯</button>
-          ${s.fileId ? `<button class="ghost sm" data-a="file">睇檔案</button>` : ''}
+          ${bookingHasFile(s) ? `<button class="ghost sm" data-a="file">睇檔案</button>` : ''}
           <button class="ghost sm danger-text" data-a="del">刪除</button>
         </div>
       </div>`;
@@ -1918,8 +2081,9 @@ function renderBookings() {
       if (isStay) {
         const s = trip.bookings.stays.find(x => x.id === id);
         if (a === 'edit') openBkModal('stay', s);
-        if (a === 'file') openBkFile(s.fileId);
+        if (a === 'file') openBkFile(s);
         if (a === 'del') confirmAsk('刪除呢間住宿？', async () => {
+          if (s.fileStoragePath) await deleteBookingCloudFile(s.fileStoragePath);
           if (s.fileId) await idbDel(s.fileId);
           trip.bookings.stays = trip.bookings.stays.filter(x => x.id !== id);
           saveTrip(trip); renderBookings();
@@ -1927,8 +2091,9 @@ function renderBookings() {
       } else {
         const f = trip.bookings.flights.find(x => x.id === id);
         if (a === 'edit') openBkModal('flight', f);
-        if (a === 'file') openBkFile(f.fileId);
+        if (a === 'file') openBkFile(f);
         if (a === 'del') confirmAsk('刪除呢張機票？', async () => {
+          if (f.fileStoragePath) await deleteBookingCloudFile(f.fileStoragePath);
           if (f.fileId) await idbDel(f.fileId);
           trip.bookings.flights = trip.bookings.flights.filter(x => x.id !== id);
           saveTrip(trip); renderBookings();
@@ -2763,7 +2928,7 @@ const FIREBASE_CONFIG = {
   appId: '1:135594737576:web:edeaae35dd4eb21b58679d'
 };
 
-let fbApp = null, fbAuth = null, fbDb = null;
+let fbApp = null, fbAuth = null, fbDb = null, fbStorage = null;
 
 function cloudDebugLine() {
   try {
@@ -2815,6 +2980,7 @@ function initFirebase() {
     fbApp = firebase.apps && firebase.apps.length ? firebase.app() : firebase.initializeApp(FIREBASE_CONFIG);
     fbAuth = firebase.auth();
     fbDb = firebase.firestore();
+    try { fbStorage = firebase.storage(); } catch (e) { console.warn('[storage] init', e); fbStorage = null; }
     try { fbDb.enablePersistence({ synchronizeTabs: true }).catch(() => {}); } catch (e) {}
     cloudReady = true;
     fbAuth.onAuthStateChanged(async (user) => {
@@ -2825,6 +2991,7 @@ function initFirebase() {
         try {
           await syncWithCloud();
           cloudSetStatus('已同步 ' + new Date().toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+          try { await flushPendingBookingUploads(true); } catch (e2) { console.warn('[storage] flush', e2); }
         } catch (e) {
           console.warn('[cloud] merge', e);
           cloudSetStatus('合併失敗：' + ((e && e.message) || '請稍後「立即同步」'));
@@ -2866,11 +3033,11 @@ function renderCloudAccountUI() {
   if (pullBtn) pullBtn.hidden = !allowForce;
   if (forceHint) {
     if (allowForce) {
-      forceHint.innerHTML = '正常用「立即同步」。若兩部唔齊：喺<strong>最齊嗰部</strong>撳「強制上載本機」，再喺另一部撳「強制下載雲端」。強制掣只開放畀 ' + FORCE_SYNC_EMAIL + '。預約附件仍只存本機。';
+      forceHint.innerHTML = '正常用「立即同步」。若兩部唔齊：喺<strong>最齊嗰部</strong>撳「強制上載本機」，再喺另一部撳「強制下載雲端」。強制掣只開放畀 ' + FORCE_SYNC_EMAIL + '。預約附件登入後會上載 Firebase Storage，換機可睇。';
     } else if (cloudUser) {
-      forceHint.textContent = '正常用「立即同步」。強制上載／下載只開放畀管理員帳號。預約附件仍只存本機。';
+      forceHint.textContent = '正常用「立即同步」。強制上載／下載只開放畀管理員帳號。預約附件登入後會同步雲端。';
     } else {
-      forceHint.textContent = '正常用「立即同步」。預約附件仍只存本機。';
+      forceHint.textContent = '正常用「立即同步」。登入後預約附件會同步到雲端（上限約 8MB）。';
     }
   }
   renderCompanionUI();
@@ -3124,6 +3291,7 @@ async function pushLocalToCloud(fromMerge, prefetchedCloudMap, forceUpload) {
     cloudSetStatus('已同步 ' + new Date().toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
       + (uploaded ? `（上載 ${uploaded} 程）` : '（已同雲端一致）'));
     if (!fromMerge) toast(uploaded ? '已同步到雲端' : '已同雲端一致');
+    try { await flushPendingBookingUploads(true); } catch (e2) { console.warn('[storage] flush after push', e2); }
   } catch (e) {
     console.warn('[cloud] push fail', e);
     const msg = (e && e.code === 'permission-denied')

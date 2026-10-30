@@ -1,0 +1,27 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function tripData(tripId) {
+      return firestore.get(/databases/(default)/documents/trips/$(tripId)).data;
+    }
+    function canAccessTrip(tripId) {
+      return signedIn()
+        && tripData(tripId).keys().hasAll(['ownerUid', 'memberUids'])
+        && (tripData(tripId).ownerUid == request.auth.uid
+            || request.auth.uid in tripData(tripId).memberUids);
+    }
+    function validBookingFile() {
+      return request.resource.size < 10 * 1024 * 1024
+        && (request.resource.contentType.matches('image/.*')
+            || request.resource.contentType == 'application/pdf');
+    }
+    match /trips/{tripId}/bookings/{bookingId}/{fileName} {
+      allow read: if canAccessTrip(tripId);
+      allow create, update: if canAccessTrip(tripId) && validBookingFile();
+      allow delete: if canAccessTrip(tripId);
+    }
+  }
+}
