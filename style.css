@@ -179,7 +179,7 @@ input[type=range] { width: 100%; accent-color: var(--pri); }
 
 /* stickers: white outline like die-cut stickers */
 .sticker { display: block; filter: drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff) drop-shadow(0 4px 5px rgba(80,60,40,.18)); }
-.sticker svg { width: 100%; height: 100%; display: block; }
+.sticker svg, .sticker img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .bob { animation: bob 4s ease-in-out infinite; }
 @keyframes bob { 0%,100% { transform: translateY(0) rotate(-1deg); } 50% { transform: translateY(-5px) rotate(1.5deg); } }
 .corner { position: absolute; right: 10px; bottom: -34px; width: 84px; height: 84px; z-index: 2; pointer-events: none; }

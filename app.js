@@ -1006,12 +1006,14 @@ document.querySelectorAll('#nav button').forEach(b => b.onclick = () => {
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === b.dataset.v));
   window.scrollTo({ top: 0 });
 });
-$('stk-top').innerHTML = `<div style="position:absolute;left:0;top:6px;width:64px;height:64px">${cat('sakura')}</div><div style="position:absolute;right:0;top:0;width:70px;height:70px">${cat('maneki')}</div>`;
-const stkShop = $('stk-shop'); if (stkShop) stkShop.innerHTML = cat('bags');
-const stkTodo = $('stk-todo'); if (stkTodo) stkTodo.innerHTML = cat('maneki');
+/* page decorations — interim refined jp PNGs (swap paths when designer delivers dedicated page cats) */
+const pageCat = (src, alt='') => `<img src="${src}" alt="${alt}" draggable="false">`;
+$('stk-top').innerHTML = `<div style="position:absolute;left:0;top:6px;width:64px;height:64px">${pageCat('assets/stickers/sticker-jp-02.png','粉花')}</div><div style="position:absolute;right:0;top:0;width:70px;height:70px">${pageCat('assets/stickers/sticker-jp-01.png','啡虎斑')}</div>`;
+const stkShop = $('stk-shop'); if (stkShop) stkShop.innerHTML = pageCat('assets/stickers/sticker-jp-04.png','三花');
+const stkTodo = $('stk-todo'); if (stkTodo) stkTodo.innerHTML = pageCat('assets/stickers/sticker-jp-08.png','暹羅');
 const pgirl = $('pgirl'); if (pgirl) pgirl.innerHTML = '<img src="assets/shop/shop-girl.png" alt="">';
 const pboy = $('pboy'); if (pboy) pboy.innerHTML = '<img src="assets/shop/shop-boy.png" alt="">';
-$('stk-bud').innerHTML = cat('shop');
+$('stk-bud').innerHTML = pageCat('assets/stickers/sticker-jp-06.png','橘貓');
 
 /* ---------- bookings CRUD (4b) ---------- */
 let bkKind = 'flight', bkEdit = null, bkPendingFile = null, bkFilter = 'all';
