@@ -1,5 +1,5 @@
 /* Station 6 — service worker（GitHub Pages 子路徑，全部用相對路徑） */
-const CACHE_VERSION = 'v6-25-fix-tdz';
+const CACHE_VERSION = 'v6-26-sw-escape';
 const CACHE_NAME = 'travel-app-' + CACHE_VERSION;
 const SHELL_URLS = [
   './index.html',
@@ -91,7 +91,6 @@ function shouldBypass(url) {
   if (host.includes('google.com') || host.includes('googleapis.com') || host.includes('gstatic.com')) return true;
   if (host.includes('maps.google')) return true;
   if (host.includes('jsdelivr.net') || host.includes('cdnjs.cloudflare.com')) return true;
-  /* Firebase Auth / Firestore / CDN — always network, never Cache Storage */
   if (host.includes('firebaseio.com') || host.includes('firestore.googleapis.com')) return true;
   if (host.includes('firebaseapp.com') || host.includes('googleapis.com')) return true;
   if (host.includes('identitytoolkit.googleapis.com') || host.includes('securetoken.googleapis.com')) return true;
@@ -100,17 +99,47 @@ function shouldBypass(url) {
   return false;
 }
 
+function isCriticalShell(url) {
+  const p = url.pathname;
+  if (/\/(index\.html|app\.js|sw\.js|style\.css|manifest\.webmanifest)$/.test(p)) return true;
+  if (/\/assets\/stickers\/kyushu-multi\/data-urls\.js$/.test(p)) return true;
+  /* GitHub Pages 目錄頁 = index.html */
+  if (p.endsWith('/travel-app-test/') || p.endsWith('/travel-app-test')) return true;
+  return false;
+}
+
+function networkFirst(req, fallbackHtml) {
+  return fetch(req).then(res => {
+    if (res && res.ok) {
+      const copy = res.clone();
+      caches.open(CACHE_NAME).then(c => c.put(req, copy)).catch(() => {});
+    }
+    return res;
+  }).catch(() =>
+    caches.match(req).then(cached => {
+      if (cached) return cached;
+      if (fallbackHtml) return caches.match('./index.html');
+      return undefined;
+    })
+  );
+}
+
 self.addEventListener('fetch', event => {
   const req = event.request;
   if (req.method !== 'GET') return;
   let url;
   try { url = new URL(req.url); } catch (e) { return; }
-  /* blob:/data: must not be intercepted — otherwise in-app img/PDF preview goes blank */
   if (url.protocol === 'blob:' || url.protocol === 'data:') return;
   if (shouldBypass(url)) return;
 
   if (url.origin !== self.location.origin) {
     event.respondWith(fetch(req).catch(() => caches.match(req)));
+    return;
+  }
+
+  /* HTML / 關鍵 JS／CSS：先網絡，避免壞腳本永遠卡死喺舊 cache */
+  if (req.mode === 'navigate' || isCriticalShell(url)) {
+    event.respondWith(networkFirst(req, req.mode === 'navigate'));
     return;
   }
 
@@ -124,9 +153,7 @@ self.addEventListener('fetch', event => {
         }
         return res;
       }).catch(() => {
-        if (req.mode === 'navigate') {
-          return caches.match('./index.html');
-        }
+        if (req.mode === 'navigate') return caches.match('./index.html');
         return caches.match(req);
       });
     })

@@ -16,6 +16,36 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<script>
+/* SW escape: app.js crash 前都要跑；一次清舊 cache 再註冊，唔再卡死 */
+(function () {
+  if (!('serviceWorker' in navigator)) return;
+  var WANT = 'v6-26-sw-escape';
+  var KEY = 'travel_sw_bust_v';
+  function reg() {
+    navigator.serviceWorker.register('./sw.js').then(function (reg) {
+      try { reg.update(); } catch (e) {}
+      if (reg.waiting) {
+        try { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch (e) {}
+      }
+    }).catch(function () {});
+    var refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (refreshing) return;
+      refreshing = true;
+      location.reload();
+    });
+  }
+  try {
+    if (localStorage.getItem(KEY) === WANT) { reg(); return; }
+    localStorage.setItem(KEY, WANT);
+  } catch (e) { reg(); return; }
+  Promise.all([
+    caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); }),
+    navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); })
+  ]).then(function () { location.reload(); }).catch(function () { location.reload(); });
+})();
+</script>
 <script src="assets/vendor/sortable.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
