@@ -2670,19 +2670,68 @@ function fillExpPayer(selected) {
     `<option value="${escH(m.id)}"${m.id === cur ? ' selected' : ''}>${escH(m.name)}</option>`
   ).join('');
 }
+let expEdit = null;
+function resetExpForm() {
+  expEdit = null;
+  $('expName').value = '';
+  $('expAmt').value = '';
+  if ($('expPayer')) $('expPayer').value = '';
+  if ($('expCur') && [...$('expCur').options].some(o => o.value === curCode())) $('expCur').value = curCode();
+  if ($('expCat').options.length) $('expCat').selectedIndex = 0;
+  $('expAdd').textContent = '加入記錄';
+  if ($('expCancel')) $('expCancel').hidden = true;
+  if ($('expDel')) $('expDel').hidden = true;
+}
+function openExpEdit(it) {
+  document.querySelectorAll('.item-menu').forEach(m => m.remove());
+  expEdit = it || null;
+  $('expPanel').hidden = false;
+  $('expName').value = it ? (it.n || '') : '';
+  $('expAmt').value = it && it.a != null ? it.a : '';
+  if (it && it.cur && [...$('expCur').options].some(o => o.value === it.cur)) $('expCur').value = it.cur;
+  else if ([...$('expCur').options].some(o => o.value === curCode())) $('expCur').value = curCode();
+  if (it && it.cat) $('expCat').value = it.cat;
+  else if ($('expCat').options.length) $('expCat').selectedIndex = 0;
+  fillExpPayer(it ? (it.payerId || '') : '');
+  $('expAdd').textContent = it ? '儲存修改' : '加入記錄';
+  if ($('expCancel')) $('expCancel').hidden = !it;
+  if ($('expDel')) $('expDel').hidden = !it;
+  setTimeout(() => $('expName').focus(), 50);
+}
 $('expToggle').onclick = () => {
-  const p = $('expPanel'); p.hidden = !p.hidden;
-  if (!p.hidden) fillExpPayer('');
+  if ($('expPanel').hidden) openExpEdit(null);
+  else { $('expPanel').hidden = true; resetExpForm(); }
+};
+if ($('expCancel')) $('expCancel').onclick = () => { $('expPanel').hidden = true; resetExpForm(); };
+if ($('expDel')) $('expDel').onclick = () => {
+  if (!expEdit) return;
+  const target = expEdit;
+  confirmAsk('刪除呢筆支出？', () => {
+    exps = exps.filter(x => x.id !== target.id);
+    saveBudget();
+    $('expPanel').hidden = true; resetExpForm();
+    renderBudget();
+  });
 };
 $('expAdd').onclick = () => {
   const a = +$('expAmt').value, cur = $('expCur').value, cat = $('expCat').value;
   if (!(a > 0)) { $('expAmt').focus(); return; }
   const n = $('expName').value.trim() || CATS.find(c => c[0] === cat)[1];
   const payerId = ($('expPayer') && $('expPayer').value) || '';
-  exps.unshift({ id: Date.now(), n, a, cur, hkd: cur === 'HKD' ? a : a * rate, cat, payerId });
+  const hkdVal = cur === 'HKD' ? a : a * rate;
+  if (expEdit) {
+    expEdit.n = n;
+    expEdit.a = a;
+    expEdit.cur = cur;
+    expEdit.hkd = hkdVal;
+    expEdit.cat = cat;
+    expEdit.payerId = payerId;
+  } else {
+    exps.unshift({ id: Date.now(), n, a, cur, hkd: hkdVal, cat, payerId });
+  }
   saveBudget();
-  $('expName').value = ''; $('expAmt').value = ''; if ($('expPayer')) $('expPayer').value = '';
   $('expPanel').hidden = true;
+  resetExpForm();
   renderBudget();
 };
 function activityMerged() {
@@ -2730,10 +2779,29 @@ function renderBudget() {
       const pm = getTripMembers().find(m => m.id === e.payerId);
       if (pm) payerLab = ' · ' + pm.name + '付';
     }
-    r.innerHTML = `<div class="cat-ic">${ic(c[2])}</div><div class="exp-m"><div class="exp-n"></div><div class="exp-s">${c[1]}${e.auto ? ' · 自動' : ''}${payerLab ? escH(payerLab) : ''}</div></div><div class="exp-a"><b>${money(e.hkd)}</b><small>${curLab}</small></div>${e.auto ? '' : '<button class="del" aria-label="刪除">×</button>'}`;
+    r.innerHTML = `<div class="cat-ic">${ic(c[2])}</div><div class="exp-m"><div class="exp-n"></div><div class="exp-s">${c[1]}${e.auto ? ' · 自動' : ''}${payerLab ? escH(payerLab) : ''}</div></div><div class="exp-a"><b>${money(e.hkd)}</b><small>${curLab}</small></div>${e.auto ? '' : '<div class="item-more-wrap"><button type="button" class="item-more" aria-label="更多">⋮</button></div>'}`;
     r.querySelector('.exp-n').textContent = e.n;
-    const del = r.querySelector('.del');
-    if (del) del.onclick = () => { exps = exps.filter(x => x.id !== e.id); saveBudget(); renderBudget(); };
+    const more = r.querySelector('.item-more');
+    if (more) more.onclick = ev => {
+      ev.stopPropagation();
+      const wrap = r.querySelector('.item-more-wrap');
+      const open = wrap.querySelector('.item-menu');
+      document.querySelectorAll('.item-menu').forEach(m => m.remove());
+      if (open) return;
+      const m = document.createElement('div'); m.className = 'item-menu';
+      m.innerHTML = '<button type="button" data-a="edit">編輯</button><button type="button" data-a="del" class="danger">刪除</button>';
+      m.onclick = e2 => {
+        e2.stopPropagation();
+        const a = e2.target.dataset.a; m.remove();
+        if (a === 'edit') openExpEdit(e);
+        if (a === 'del') confirmAsk('刪除呢筆支出？', () => {
+          exps = exps.filter(x => x.id !== e.id);
+          if (expEdit && expEdit.id === e.id) { $('expPanel').hidden = true; resetExpForm(); }
+          saveBudget(); renderBudget();
+        });
+      };
+      wrap.appendChild(m);
+    };
     box.appendChild(r);
   });
   if (typeof renderSettlement === 'function') renderSettlement();

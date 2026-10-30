@@ -228,7 +228,11 @@
         <select class="fld" id="expCat"></select>
         <select class="fld" id="expPayer" style="grid-column:1/-1"><option value="">付款人（可選）</option></select>
       </div>
-      <button class="btn" id="expAdd" style="width:100%;margin-top:12px">加入記錄</button>
+      <div class="tm-btns" style="margin-top:14px">
+        <button type="button" class="ghost" id="expCancel" hidden>取消</button>
+        <button type="button" class="ghost danger-text" id="expDel" hidden>刪除</button>
+        <button class="btn" id="expAdd" style="flex:1">加入記錄</button>
+      </div>
     </div>
     <div class="card" id="expList"></div>
   </section>

@@ -311,6 +311,7 @@ a.hotel svg:last-child { margin-left: auto; }
 .exp-a b { display: block; font-family: 'Nunito', sans-serif; font-weight: 800; }
 .exp-a small { color: var(--soft); font-size: .78rem; }
 .exp .del { color: var(--soft); opacity: .7; padding: 4px 6px; font-size: 1.1rem; }
+.exp .item-more-wrap { position: relative; flex: none; }
 .empty { text-align: center; color: var(--soft); font-size: .9rem; padding: 10px 0; }
 .theme-name { margin-top: 14px; color: var(--soft); font-size: .88rem; }
 
@@ -338,7 +339,7 @@ a.hotel svg:last-child { margin-left: auto; }
 .shop-item.done .si-name { text-decoration: line-through; opacity: .55; }
 .shop-item.done .thumb { opacity: .55; }
 .shop-item .item-more-wrap { position: relative; flex: none; align-self: flex-start; }
-.shop-item .item-more, .todo .item-more, .mem-acts .item-more {
+.shop-item .item-more, .todo .item-more, .mem-acts .item-more, .exp .item-more {
   width: 36px; height: 36px; border-radius: 50%; background: transparent; border: none;
   color: var(--soft); font-weight: 800; font-size: 1.25rem; line-height: 1; opacity: .85; padding: 0;
 }
