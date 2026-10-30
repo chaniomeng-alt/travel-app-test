@@ -343,6 +343,173 @@ let days = trip.days;
     </div>`).join('\n');
 })();
 
+
+/* ---------- placeable stickers (swappable assets) ----------
+   To swap in designer PNGs: set src, e.g. { name:'招財貓', src:'assets/stickers/maneki.png' }.
+   Without src the built-in SVG drawing is used. */
+const STICKERS = {
+  maneki: { name: '招財貓' }, sakura: { name: '櫻花貓' }, ramen: { name: '拉麵貓' }, bowl: { name: '碗貓' },
+  shop: { name: '購物貓' }, bags: { name: '手袋貓' }, girl: { name: '女仔' }
+};
+const stkHTML = k => { const a = STICKERS[k] || {}; return a.src ? `<img src="${a.src}" alt="${a.name || k}" draggable="false">` : cat(k); };
+function renderStickers(d) {
+  const layer = document.getElementById('stkLayer'); if (!layer) return;
+  d.stickers = d.stickers || [];
+  layer.innerHTML = '';
+  d.stickers.forEach((s, idx) => {
+    const el = document.createElement('div');
+    el.className = 'placed sticker';
+    el.style.left = s.x + '%'; el.style.top = s.y + 'px'; el.style.transform = `rotate(${s.r || 0}deg)`;
+    el.innerHTML = stkHTML(s.k) + '<button class="x" aria-label="刪除貼紙">×</button>';
+    el.querySelector('.x').onpointerdown = e => e.stopPropagation();
+    el.querySelector('.x').onclick = e => { e.stopPropagation(); d.stickers.splice(idx, 1); saveDays(); renderStickers(d); };
+    let sx, sy, ox, oy, moved = false, lastTap = 0;
+    el.onpointerdown = e => {
+      e.preventDefault(); el.setPointerCapture(e.pointerId);
+      layer.querySelectorAll('.placed.sel').forEach(p => p !== el && p.classList.remove('sel'));
+      el.classList.add('sel', 'dragging');
+      sx = e.clientX; sy = e.clientY; ox = el.offsetLeft; oy = el.offsetTop; moved = false;
+    };
+    el.onpointermove = e => {
+      if (sx === undefined) return;
+      const dx = e.clientX - sx, dy = e.clientY - sy;
+      if (Math.abs(dx) + Math.abs(dy) > 4) moved = true;
+      const W = layer.clientWidth, H = layer.clientHeight;
+      el.style.left = Math.max(0, Math.min(W - el.offsetWidth, ox + dx)) / W * 100 + '%';
+      el.style.top = Math.max(0, Math.min(H - el.offsetHeight, oy + dy)) + 'px';
+    };
+    el.onpointerup = () => {
+      el.classList.remove('dragging'); sx = undefined;
+      if (moved) { s.x = parseFloat(el.style.left); s.y = parseFloat(el.style.top); saveDays(); return; }
+      const now = Date.now();
+      if (now - lastTap < 320) { s.r = ((s.r || 0) + 360 + 45); el.style.transform = `rotate(${s.r}deg)`; s.r %= 360; saveDays(); lastTap = 0; }
+      else lastTap = now;
+    };
+    layer.appendChild(el);
+  });
+}
+function openStickerPicker() {
+  const g = document.getElementById('stkGrid');
+  g.innerHTML = Object.keys(STICKERS).map(k => `<button class="sticker" data-k="${k}" aria-label="${STICKERS[k].name}">${stkHTML(k)}</button>`).join('');
+  g.querySelectorAll('button').forEach(b => b.onclick = () => {
+    const d = days[currentDay]; d.stickers = d.stickers || [];
+    d.stickers.push({ k: b.dataset.k, x: 35 + Math.random() * 20, y: 140 + Math.random() * 60, r: 0 });
+    saveDays(); renderStickers(d);
+  });
+  document.getElementById('stkModal').hidden = false;
+}
+document.getElementById('stkClose').onclick = () => { document.getElementById('stkModal').hidden = true; };
+document.getElementById('dayCard').addEventListener('click', e => { if (e.target.closest('#stkOpen')) openStickerPicker(); });
+
+/* ---------- home: 我的旅程 ---------- */
+const COVERS = ['#F4C7C3', '#BFE3D0', '#C9DDF2', '#F7DFA5', '#D9CCEF', '#F2C9A0'];
+const IN_TRIP = location.hash === '#trip';
+function enterTrip(id) { setActiveTrip(id); location.hash = 'trip'; location.reload(); }
+document.getElementById('backHome').onclick = () => { history.replaceState(null, '', location.pathname + location.search); location.reload(); };
+function daysBetween(a, b) { return Math.round((pd(b) - pd(a)) / 864e5) + 1; }
+const escH = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const coverCSS = c => !c ? `background:${COVERS[0]}` : c.startsWith('#') ? `background:${c}` : `background-image:url('${c}')`;
+function renderHome() {
+  const L = document.getElementById('tripList'); L.innerHTML = '';
+  const today = isoDate(new Date());
+  APP.trips.forEach(t => {
+    const st = tripStatus(t), n = daysBetween(t.startDate, t.endDate);
+    let extra = '';
+    if (st === 'planning') extra = `<span class="trip-badge">✈️ 仲有 ${daysBetween(today, t.startDate) - 1} 日出發</span>`;
+    else if (st === 'ongoing') { const k = daysBetween(t.startDate, today); extra = `<span class="trip-badge">旅程進行中・Day ${k}/${n}</span><div class="track"><div class="bar" style="width:${k / n * 100}%"></div></div>`; }
+    else extra = '<span class="trip-badge">已完成</span>';
+    const c = document.createElement('div');
+    c.className = 'card trip-card'; c.dataset.id = t.id;
+    c.innerHTML = `<div class="trip-cover" style="${coverCSS(t.cover)}"></div>
+      <div class="trip-body"><div class="trip-name">${escH(t.title)}</div>
+      <div class="trip-meta">📍 ${escH(t.destination || '未填目的地')}</div>
+      <div class="trip-meta">${t.startDate.replace(/-/g, '/')} – ${t.endDate.replace(/-/g, '/')}・${n} 日</div>${extra}</div>
+      <button class="trip-more" aria-label="更多">⋯</button>`;
+    c.onclick = e => { if (!e.target.closest('.trip-more,.trip-menu')) enterTrip(t.id); };
+    c.querySelector('.trip-more').onclick = e => {
+      e.stopPropagation();
+      const open = c.querySelector('.trip-menu'); document.querySelectorAll('.trip-menu').forEach(m => m.remove());
+      if (open) return;
+      const m = document.createElement('div'); m.className = 'trip-menu';
+      m.innerHTML = '<button data-a="edit">編輯</button><button data-a="dup">複製</button><button data-a="del" class="danger">刪除</button>';
+      m.onclick = ev => {
+        ev.stopPropagation(); const a = ev.target.dataset.a; m.remove();
+        if (a === 'edit') openTripModal(t);
+        if (a === 'dup') { const cp = JSON.parse(JSON.stringify(t)); cp.id = uid('t'); cp.title = t.title + '（副本）'; APP.trips.splice(APP.trips.indexOf(t) + 1, 0, cp); persist(); renderHome(); }
+        if (a === 'del') askDelete(t);
+      };
+      c.appendChild(m);
+    };
+    L.appendChild(c);
+  });
+}
+document.addEventListener('click', e => { if (!e.target.closest('.trip-menu,.trip-more')) document.querySelectorAll('.trip-menu').forEach(m => m.remove()); });
+function askDelete(t) {
+  const M = document.getElementById('confirmModal');
+  document.getElementById('cfMsg').textContent = APP.trips.length <= 1 ? '至少要保留一個旅程，所以唔可以刪除。' : `「${t.title}」同入面所有行程、預算、清單都會刪除，冇得還原。`;
+  document.getElementById('cfYes').hidden = APP.trips.length <= 1;
+  document.getElementById('cfYes').onclick = () => { deleteTrip(t.id); M.hidden = true; renderHome(); };
+  document.getElementById('cfNo').onclick = () => { M.hidden = true; };
+  M.hidden = false;
+}
+let tmCover = '', tmEditing = null;
+const $id = s => document.getElementById(s);
+function tmUpdateDays() {
+  const a = $id('tmStart').value, b = $id('tmEnd').value;
+  $id('tmDays').textContent = a && b && b >= a ? `共 ${daysBetween(a, b)} 日` : '請揀開始同結束日期';
+}
+function tmRenderCovers() {
+  $id('tmCovers').innerHTML = COVERS.map(c => `<button data-c="${c}" style="background:${c}" class="${tmCover === c ? 'on' : ''}" aria-label="顏色封面"></button>`).join('') +
+    (tmCover && !tmCover.startsWith('#') ? `<button class="on" style="background-image:url('${tmCover}')" aria-label="已上載封面"></button>` : '');
+  $id('tmCovers').querySelectorAll('[data-c]').forEach(b => b.onclick = () => { tmCover = b.dataset.c; tmRenderCovers(); });
+}
+function openTripModal(t) {
+  tmEditing = t || null;
+  $id('tmTitle').textContent = t ? '編輯旅程' : '新增旅程';
+  const td = isoDate(new Date());
+  $id('tmName').value = t ? t.title : ''; $id('tmDest').value = t ? t.destination : '';
+  $id('tmStart').value = t ? t.startDate : td; $id('tmEnd').value = t ? t.endDate : td;
+  $id('tmCur').value = t ? (t.currency || 'JPY') : 'JPY';
+  tmCover = t ? (t.cover || COVERS[0]) : COVERS[APP.trips.length % COVERS.length];
+  $id('tmErr').textContent = ''; $id('tmImgNote').textContent = '會自動縮細';
+  tmUpdateDays(); tmRenderCovers();
+  $id('tripModal').hidden = false;
+}
+$id('tmStart').onchange = () => { if ($id('tmEnd').value < $id('tmStart').value) $id('tmEnd').value = $id('tmStart').value; tmUpdateDays(); };
+$id('tmEnd').onchange = tmUpdateDays;
+$id('tmCancel').onclick = () => { $id('tripModal').hidden = true; };
+$id('tmImg').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const img = new Image(), url = URL.createObjectURL(f);
+  img.onload = () => {
+    const w = Math.min(800, img.width), h = Math.round(img.height * w / img.width);
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    cv.getContext('2d').drawImage(img, 0, 0, w, h);
+    tmCover = cv.toDataURL('image/jpeg', 0.8); URL.revokeObjectURL(url);
+    $id('tmImgNote').textContent = `已縮細至 ${w}×${h}`; tmRenderCovers();
+  };
+  img.onerror = () => { $id('tmImgNote').textContent = '讀唔到張相'; };
+  img.src = url; e.target.value = '';
+};
+$id('tmSave').onclick = () => {
+  const title = $id('tmName').value.trim(), a = $id('tmStart').value, b = $id('tmEnd').value;
+  if (!title) return $id('tmErr').textContent = '請輸入旅程名稱';
+  if (!a || !b || b < a) return $id('tmErr').textContent = '結束日期唔可以早過開始日期';
+  if (daysBetween(a, b) > 60) return $id('tmErr').textContent = '旅程最多 60 日';
+  const o = { title, destination: $id('tmDest').value.trim(), startDate: a, endDate: b, currency: $id('tmCur').value, cover: tmCover };
+  if (tmEditing) {
+    const t = tmEditing, byDate = {};
+    (t.days || []).forEach(d => byDate[d.date] = d);
+    Object.assign(t, o);
+    t.days = [];
+    for (let d = pd(a); d <= pd(b); d.setDate(d.getDate() + 1)) { const k = isoDate(d); t.days.push(byDate[k] || { date: k, title: '', items: [] }); }
+    saveTrip(t);
+  } else createTrip(o);
+  $id('tripModal').hidden = true; renderHome();
+};
+$id('addTrip').onclick = () => openTripModal();
+if (!IN_TRIP) { document.body.classList.add('at-home'); $id('home').hidden = false; renderHome(); }
+
 /* ---------- itinerary ---------- */
 const chipsEl = document.getElementById('chips');
 days.forEach((d, i) => {
@@ -358,7 +525,10 @@ function showDay(i) {
   currentDay = i;
   const d = days[i];
   chipsEl.querySelectorAll('.chip').forEach((c, k) => c.classList.toggle('active', k === i));
-  document.getElementById('weather').innerHTML = `
+  const wEl = document.getElementById('weather');
+  const hasW = !!(d.temp && d.temp.length);
+  wEl.style.display = hasW ? '' : 'none';
+  if (hasW) wEl.innerHTML = `
     <div class="w-ic">${ic('cloud')}</div>
     <div><div class="w-temp">${d.temp[0]}°C <i>/ ${d.temp[1]}°C</i></div><div class="w-note">11月季節參考</div></div>
     <div class="w-right">${d.place}<small>最高 / 最低</small></div>`;
@@ -366,12 +536,12 @@ function showDay(i) {
     <div class="day-head">
       <div>
         <div class="day-date"><span class="dow">${dowOf(d)}</span><span class="num">${dayNum(d)}</span><span class="mon">${monOf(d)}</span></div>
-        <div class="day-title">Day ${i + 1} ${d.title}</div>
-        <div class="day-route">✓ ${d.route}</div>
+        <div class="day-title">Day ${i + 1} ${d.title || ''}</div>
+        ${d.route ? `<div class="day-route">✓ ${d.route}</div>` : ''}
       </div>
-      <div class="sticker bob" style="width:112px;height:112px;flex:none;margin-top:-6px">${cat(d.cat)}</div>
+      <div class="sticker bob" style="width:112px;height:112px;flex:none;margin-top:-6px">${cat(d.cat || 'maneki')}</div>
     </div>
-    <a class="hotel" href="${gmap(d.hq)}" target="_blank" rel="noopener">${ic('bed')}<span>${d.hotel}</span>${ic('pin')}</a>
+    ${d.hotel ? `<a class="hotel" href="${gmap(d.hq || d.hotel)}" target="_blank" rel="noopener">${ic('bed')}<span>${d.hotel}</span>${ic('pin')}</a>` : ''}
     <div class="sec-title">活動安排 <span style="font-size:.8rem;color:var(--soft);font-weight:500">（可添加／刪除）</span></div>
     <div id="actList"></div>
     <div class="add-row" style="margin-top:10px;flex-wrap:wrap">
@@ -381,7 +551,10 @@ function showDay(i) {
     </div>
     <div class="add-row" style="margin-top:6px">
       <input class="fld" id="newMap" placeholder="地圖關鍵字（可選，例如：竹乃屋 福岡空港）" style="flex:1">
-    </div>`;
+    </div>
+    <button class="ghost stk-btn" id="stkOpen">🐾 選擇貼紙</button>
+    <div class="stk-layer" id="stkLayer"></div>`;
+  renderStickers(d);
   const list = document.getElementById('actList');
   d.items.forEach((it, idx) => {
     const r = document.createElement('div');
@@ -441,15 +614,27 @@ showDay(0);
 
 /* ---------- stickers on other tabs ---------- */
 document.getElementById('stk-top').innerHTML = `<div style="position:absolute;left:0;top:6px;width:64px;height:64px">${cat('sakura')}</div><div style="position:absolute;right:0;top:0;width:70px;height:70px">${cat('maneki')}</div>`;
-document.getElementById('stk-bowl').innerHTML = cat('bowl');
+{ const sb = document.getElementById('stk-bowl'); if (sb) sb.innerHTML = cat('bowl'); }
 document.getElementById('stk-todo').innerHTML = cat('ramen');
 
-/* ---------- countdown ---------- */
-const target = new Date(trip.startDate + 'T00:00:00+08:00').getTime();
+/* ---------- countdown (per active trip) ---------- */
+const target = new Date(trip.startDate + 'T00:00:00').getTime();
+const tripEnd = new Date(trip.endDate + 'T23:59:59').getTime();
+(function () {
+  const d = pd(trip.startDate);
+  document.getElementById('cdFoot').innerHTML = `<span class="ft-lab">出發日</span><b>${d.getFullYear()}</b><i>年</i><b>${d.getMonth() + 1}</b><i>月</i><b>${d.getDate()}</b><i>日</i><span class="ft-dow">週${'日一二三四五六'[d.getDay()]}</span>`;
+  document.title = `${trip.title}｜${trip.startDate.slice(5).replace('-', '/')}–${trip.endDate.slice(5).replace('-', '/')}`;
+})();
 function tick() {
   const now = Date.now(), diff = target - now;
-  const cd = document.getElementById('cd'), bar = document.getElementById('bar'), plane = document.getElementById('plane');
-  if (diff <= 0) { cd.textContent = '出發日到了！'; bar.style.width = '100%'; plane.style.left = '100%'; return; }
+  const cd = document.getElementById('cd'), bar = document.getElementById('bar'), plane = document.getElementById('plane'), lab = document.getElementById('cdLabel');
+  if (diff <= 0) {
+    if (now > tripEnd) { lab.textContent = trip.title; cd.textContent = '旅程已完成 🎉'; bar.style.width = '100%'; plane.style.left = '100%'; return; }
+    const total = tripEnd - target, pct = Math.min(100, (now - target) / total * 100);
+    lab.textContent = '旅程進行中'; cd.innerHTML = `Day ${Math.floor((now - target) / 864e5) + 1}<span class="u">/ ${days.length} 日</span>`;
+    bar.style.width = pct + '%'; plane.style.left = pct + '%'; return;
+  }
+  lab.textContent = '距離出發';
   const dd = Math.floor(diff / 864e5), h = Math.floor(diff % 864e5 / 36e5), m = Math.floor(diff % 36e5 / 6e4), s = Math.floor(diff % 6e4 / 1e3);
   const p2 = n => String(n).padStart(2, '0');
   cd.innerHTML = `${dd}<span class="u">天</span>${p2(h)}<span class="c"> : </span>${p2(m)}<span class="c"> : </span>${p2(s)}`;

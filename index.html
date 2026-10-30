@@ -13,16 +13,38 @@
 <body>
 <div id="petals"></div>
 
+<section id="home" hidden>
+  <div class="page-head"><h1 class="page">我的旅程</h1><div class="page-sub">開始規劃你嘅下一趟旅行</div></div>
+  <div id="tripList"></div>
+  <button class="add-trip" id="addTrip">＋ 新增旅程</button>
+</section>
+<div class="modal" id="tripModal" hidden><div class="modal-card card">
+  <h3 id="tmTitle">新增旅程</h3>
+  <label>旅程名稱<input class="fld" id="tmName" maxlength="30" placeholder="例如 曼谷五日遊"></label>
+  <label>目的地<input class="fld" id="tmDest" maxlength="30" placeholder="例如 泰國曼谷"></label>
+  <div class="tm-row"><label>開始日期<input class="fld" type="date" id="tmStart"></label><label>結束日期<input class="fld" type="date" id="tmEnd"></label></div>
+  <div class="tm-days" id="tmDays">共 1 日</div>
+  <label>貨幣<select class="fld" id="tmCur"><option>JPY</option><option>THB</option><option>KRW</option><option>TWD</option><option>USD</option><option>EUR</option><option>GBP</option></select></label>
+  <div class="tm-lab">封面</div>
+  <div class="tm-covers" id="tmCovers"></div>
+  <div class="photo-pick"><label for="tmImg">📷 上載封面</label><input type="file" id="tmImg" accept="image/*" hidden><span id="tmImgNote">會自動縮細</span></div>
+  <div class="tm-err" id="tmErr"></div>
+  <div class="tm-btns"><button class="ghost" id="tmCancel">取消</button><button class="btn" id="tmSave">儲存</button></div>
+</div></div>
+<div class="modal" id="confirmModal" hidden><div class="modal-card card"><h3>刪除旅程？</h3><p id="cfMsg"></p><div class="tm-btns"><button class="ghost" id="cfNo">取消</button><button class="btn danger" id="cfYes">刪除</button></div></div></div>
+<div class="modal" id="stkModal" hidden><div class="modal-card card"><h3>選擇貼紙</h3><div class="stk-grid" id="stkGrid"></div><p class="hint" style="margin:8px 0 0">單擊拖動・雙擊旋轉・撳 × 刪除</p><div class="tm-btns"><button class="ghost" id="stkClose">完成</button></div></div></div>
+
 <main>
+  <button class="back-btn" id="backHome" aria-label="返回我的旅程">‹ 我的旅程</button>
   <!-- 行程 -->
   <section class="view active" id="v-trip">
     <div class="card count">
       <div class="count-top">
-        <div class="count-label">距離出發</div>
+        <div class="count-label" id="cdLabel">距離出發</div>
         <div class="count-time" id="cd">-- <span class="u">天</span>00<span class="c"> : </span>00<span class="c"> : </span>00</div>
         <div class="track"><div class="bar" id="bar"></div><div class="plane" id="plane">✈️</div></div>
       </div>
-      <div class="count-foot"><span class="ft-lab">出發日</span><b>2026</b><i>年</i><b>11</b><i>月</i><b>22</b><i>日</i><span class="ft-dow">週日</span></div>
+      <div class="count-foot" id="cdFoot"></div>
     </div>
 
     <div class="chips" id="chips"></div>
@@ -171,7 +193,7 @@
       <div class="set-h"><div class="ci"><svg class="ic" viewBox="0 0 24 24" id="ic-spark"></svg></div><div><b>飄落特效</b><small>選擇背景動畫效果</small></div></div>
       <div class="fx-grid" id="fxGrid"></div>
     </div>
-    <p class="hint">小小貓陪你去九州 🐾</p>
+    <p class="hint" id="setHint">小小貓陪你去旅行 🐾</p>
   </section>
 </main>
 
