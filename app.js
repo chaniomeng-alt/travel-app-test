@@ -285,12 +285,12 @@ function buildThailandTrip() {
     budget: { total: 0, rate: 0.22, expenses: [] },
     shop: TH_DEFAULT_SHOP.map(x => Object.assign({}, x)),
     todos: TH_DEFAULT_TODOS.map(x => Object.assign({}, x)),
-    members: [], _noAdd: true
+    members: [], settings: defaultTripSettings('bangkok'), _kind: 'bangkok', _noAdd: true
   });
 }
 const COVER_KYUSHU = 'assets/covers/kyushu.png?v=4';
 const COVER_BANGKOK = 'assets/covers/bangkok.png?v=4';
-const SEED_VER = 4;
+const SEED_VER = 5;
 function ensureDefaultCovers() {
   let changed = false;
   (APP.trips || []).forEach(t => {
@@ -310,10 +310,45 @@ function ensureDefaultCovers() {
   });
   return changed;
 }
+function migrateTripSettings() {
+  const g = APP.settings || {};
+  let changed = false;
+  (APP.trips || []).forEach(t => {
+    if (!t) return;
+    if (!t.settings || typeof t.settings !== 'object') {
+      if (isBangkokTrip(t)) t.settings = defaultTripSettings('bangkok');
+      else if (isKyushuTrip(t)) {
+        t.settings = {
+          theme: g.theme != null ? g.theme : 6,
+          fs: g.fs != null ? g.fs : 16,
+          fx: g.fx != null ? g.fx : 'leaf',
+          dark: !!g.dark
+        };
+      } else {
+        t.settings = {
+          theme: g.theme != null ? g.theme : 6,
+          fs: g.fs != null ? g.fs : 16,
+          fx: g.fx != null ? g.fx : 'none',
+          dark: !!g.dark
+        };
+      }
+      changed = true;
+    } else {
+      if (t.settings.theme == null) { t.settings.theme = isBangkokTrip(t) ? 2 : (g.theme ?? 6); changed = true; }
+      if (t.settings.fs == null) { t.settings.fs = g.fs ?? 16; changed = true; }
+      if (t.settings.fx == null) { t.settings.fx = isBangkokTrip(t) ? 'none' : (g.fx ?? 'leaf'); changed = true; }
+      if (t.settings.dark == null) { t.settings.dark = !!g.dark; changed = true; }
+    }
+  });
+  return changed;
+}
 function ensureSeed() {
+  /* Always migrate per-trip settings if missing */
+  let always = migrateTripSettings();
+  if (ensureDefaultCovers()) always = true;
   if ((APP.seedVersion || 1) >= SEED_VER) {
-    if (ensureDefaultCovers()) { persist(); return true; }
-    return false;
+    if (always) persist();
+    return always;
   }
   let changed = false;
   const kz = APP.trips.find(t => t.id === 't1' || t.title === '九州小旅');
@@ -350,15 +385,33 @@ function toDays(src, start) {
     return o;
   });
 }
+function defaultTripSettings(kind) {
+  /* kind: 'bangkok' | 'kyushu' | 'new' */
+  if (kind === 'bangkok') return { theme: 2, fs: 16, fx: 'none', dark: false }; /* 綠 + 無特效 */
+  if (kind === 'kyushu') return { theme: 6, fs: 16, fx: 'leaf', dark: false }; /* 楓葉紅 + 秋葉（沿用原預設） */
+  return { theme: 6, fs: 16, fx: 'none', dark: false };
+}
+function isBangkokTrip(t) {
+  if (!t) return false;
+  const blob = ((t.title || '') + ' ' + (t.destination || '')).trim();
+  return t.id === 't-thai' || t.title === '曼谷小旅' || /曼谷|泰國|Bangkok|Thai/i.test(blob);
+}
+function isKyushuTrip(t) {
+  if (!t) return false;
+  const blob = ((t.title || '') + ' ' + (t.destination || '')).trim();
+  return t.id === 't1' || t.title === '九州小旅' || /九州/.test(blob);
+}
 function createTrip(opts) {
   opts = opts || {};
   const start = opts.startDate || isoDate(new Date()), end = opts.endDate || start;
+  const kindHint = opts.settings ? null : (opts._kind || (isBangkokTrip(opts) ? 'bangkok' : (isKyushuTrip(opts) ? 'kyushu' : 'new')));
   const t = {
     id: opts.id || uid('t'), title: opts.title || '新旅程', destination: opts.destination || '',
     startDate: start, endDate: end, cover: opts.cover || '', currency: opts.currency || 'JPY',
     days: opts.days || [], bookings: opts.bookings || { flights: [], stays: [] },
     budget: opts.budget || { total: 0, rate: ({ JPY:0.052, THB:0.22, KRW:0.0056, TWD:0.24, USD:7.8, EUR:8.4, GBP:9.9 }[opts.currency || 'JPY'] || 0.052), expenses: [] },
-    shop: opts.shop || [], todos: opts.todos || [], members: opts.members || []
+    shop: opts.shop || [], todos: opts.todos || [], members: opts.members || [],
+    settings: opts.settings || defaultTripSettings(kindHint || 'new')
   };
   if (!t.days.length) for (let d = pd(start); d <= pd(end); d.setDate(d.getDate() + 1)) t.days.push({ date: isoDate(d), title: '', items: [] });
   if (APP && !opts._noAdd) { APP.trips.push(t); persist(); }
@@ -378,7 +431,7 @@ function migrate() {
     budget: { total: +old('kz_budget') || 0, rate: +old('kz_rate') || 0.052, expenses: Array.isArray(exps) ? exps : [] },
     shop: Array.isArray(shop) ? shop : KZ_DEFAULT_SHOP.map(x => Object.assign({}, x)),
     todos: Array.isArray(todos) ? todos : KZ_DEFAULT_TODOS.map(x => Object.assign({}, x)),
-    members: [], _noAdd: true
+    members: [], settings: { theme: settings.theme, fs: settings.fs, fx: settings.fx, dark: false }, _kind: 'kyushu', _noAdd: true
   });
   const tThai = buildThailandTrip();
   return { version: 1, seedVersion: SEED_VER, activeTripId: 't1', settings, trips: [t1, tThai] };
@@ -422,8 +475,28 @@ function deleteTrip(id) {
   persist(); return true;
 }
 function setActiveTrip(id) { if (APP.trips.some(t => t.id === id)) { APP.activeTripId = id; persist(); return true; } return false; }
-function getSetting(k, f) { return APP.settings[k] ?? f; }
-function setSetting(k, v) { APP.settings[k] = v; persist(); }
+function isInTripView() { return location.hash === '#trip'; }
+/* 設定款式：每個旅程獨立（theme/fs/dark/fx）。首頁用中性預設；APP.settings 只做首頁／遷移 fallback。 */
+const HOME_SETTINGS = { theme: 3, fs: 16, fx: 'none', dark: false }; /* 櫻花粉、無特效 */
+function getSetting(k, f) {
+  if (!isInTripView()) return HOME_SETTINGS[k] ?? (APP.settings && APP.settings[k]) ?? f;
+  const t = getTrip();
+  if (t && t.settings && t.settings[k] != null) return t.settings[k];
+  return (APP.settings && APP.settings[k]) ?? f;
+}
+function setSetting(k, v) {
+  if (!isInTripView()) {
+    APP.settings = APP.settings || {};
+    APP.settings[k] = v;
+    persist();
+    return;
+  }
+  const t = getTrip();
+  if (!t.settings) t.settings = {};
+  t.settings[k] = v;
+  /* 唔再將 theme/fs/dark/fx 寫入 global */
+  persist();
+}
 window.TripStore = { getTrip, saveTrip, createTrip, deleteTrip, setActiveTrip, tripStatus, get app() { return APP; } };
 
 /* ---------- placeable stickers (swappable assets) ----------
@@ -518,7 +591,7 @@ const IN_TRIP = location.hash === '#trip';
 function enterTrip(id) { setActiveTrip(id); location.hash = 'trip'; location.reload(); }
 document.getElementById('backHome').onclick = () => { history.replaceState(null, '', location.pathname + location.search); location.reload(); };
 function daysBetween(a, b) { return Math.round((pd(b) - pd(a)) / 864e5) + 1; }
-const escH = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&', '<': '<', '>': '>', '"': '"' }[c]));
+const escH = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const coverCSS = c => !c ? `background:${COVERS[0]}` : c.startsWith('#') ? `background:${c}` : `background-image:url('${c}')`;
 function renderHome() {
   const L = document.getElementById('tripList'); L.innerHTML = '';
@@ -1526,15 +1599,16 @@ function renderWeatherPage() {
   $('wxHint').textContent = when
     ? `資料來自 Open-Meteo · 更新於 ${when} · 「季節參考」係往年同期平均／靜態氣溫，唔係即時預報`
     : '標「季節參考」唔係即時預報；出發前約兩星期會有真預報';
+  /* 密實卡：跟原版九州風格（h3 / .d / .t / p），唔再放大格 */
   grid.innerHTML = days.map(d => {
     const w = wxForDay(d);
     const label = String(d.date).slice(5).replace('-', '/');
-    const place = escH(d.place || trip.destination || '');
+    const place = escH(d.place || trip.destination || '—');
     if (w.kind === 'live') {
       const [lab, icon] = wxLabel(w.code);
-      return `<div class="card"><div style="font-size:1.6rem">${icon}</div><b>${label}</b>${place ? `<div class="w-note">${place}</div>` : ''}<div class="w-temp">${w.hi}° / ${w.lo}°</div><div class="w-note">${lab}</div><span class="wx-badge live">預報</span></div>`;
+      return `<div class="card"><h3>${place}</h3><div class="d">${label}</div><div class="t">${w.hi}–${w.lo}°C</div><p>${icon} ${lab} · 預報</p></div>`;
     }
-    return `<div class="card wx-ref"><div style="font-size:1.6rem">🌡</div><b>${label}</b>${place ? `<div class="w-note">${place}</div>` : ''}<div class="w-temp">${w.hi}° / ${w.lo}°</div><div class="w-note ref">季節參考</div><span class="wx-badge">季節參考 · 非預報</span></div>`;
+    return `<div class="card wx-ref"><h3>${place}</h3><div class="d">${label}</div><div class="t">${w.hi}–${w.lo}°C</div><p class="ref">季節參考 · 非預報</p></div>`;
   }).join('');
 }
 function renderDayWeather(d) {
@@ -1544,9 +1618,9 @@ function renderDayWeather(d) {
   const place = escH(d.place || trip.destination || '');
   if (w.kind === 'live') {
     const [lab, icon] = wxLabel(w.code);
-    wEl.innerHTML = `<div class="w-ic" style="font-size:1.6rem">${icon}</div><div><div class="w-temp">${w.hi}°C <i>/ ${w.lo}°C</i></div><div class="w-note">${lab}</div></div><div class="w-right">${place}<small>最高 / 最低 · 預報</small></div>`;
+    wEl.innerHTML = `<div class="w-ic">${icon}</div><div><div class="w-temp">${w.hi}°C <i>/ ${w.lo}°C</i></div><div class="w-note">${lab} · 預報</div></div><div class="w-right">${place}<small>最高 / 最低</small></div>`;
   } else {
-    wEl.innerHTML = `<div class="w-ic">${ic('cloud')}</div><div><div class="w-temp">${w.hi}°C <i>/ ${w.lo}°C</i></div><div class="w-note ref">季節參考 · 非即時預報</div></div><div class="w-right">${place}<small>最高 / 最低</small></div>`;
+    wEl.innerHTML = `<div class="w-ic">${ic('cloud')}</div><div><div class="w-temp">${w.hi}°C <i>/ ${w.lo}°C</i></div><div class="w-note ref">季節參考 · 非預報</div></div><div class="w-right">${place}<small>最高 / 最低</small></div>`;
   }
 }
 fetchWeather();
@@ -1620,8 +1694,14 @@ function setFx(k) {
   setSetting('fx', k);
 }
 $('fab').onclick = () => setFx(FX[(FX.findIndex(f => f[0] === curFx) + 1) % FX.length][0]);
-const savedFx = getSetting('fx', 'leaf');
-setFx(FX.some(f => f[0] === savedFx) ? savedFx : 'leaf');
+const savedFx = getSetting('fx', isInTripView() ? (isBangkokTrip(getTrip()) ? 'none' : 'leaf') : 'none');
+setFx(FX.some(f => f[0] === savedFx) ? savedFx : (isInTripView() && isBangkokTrip(getTrip()) ? 'none' : 'leaf'));
+if ($('setHint') && isInTripView()) {
+  const tt = getTrip();
+  $('setHint').textContent = `「${tt.title}」專用設定 · 切換旅程唔會跟住改`;
+  const sub = document.querySelector('#v-set .page-sub');
+  if (sub) sub.textContent = '只影響呢個旅程嘅樣';
+}
 
 /* CSS for toggle.on */
 (function(){ const s=document.createElement('style'); s.textContent=`.toggle{width:48px;height:28px;border-radius:99px;border:3px solid var(--line);background:#ddd;position:relative;flex:none}.toggle::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}.toggle.on,.toggle[aria-pressed="true"]{background:var(--pri);border-color:var(--pri)}.toggle.on::after,.toggle[aria-pressed="true"]::after{left:22px}`; document.head.appendChild(s); })();

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "seedVersion": 3,
+  "seedVersion": 5,
   "activeTripId": "t1",
   "settings": {
     "theme": 6,
@@ -774,7 +774,13 @@
           "g": "insurance"
         }
       ],
-      "members": []
+      "members": [],
+      "settings": {
+        "theme": 6,
+        "fs": 16,
+        "fx": "leaf",
+        "dark": false
+      }
     },
     {
       "id": "t-thai",
@@ -943,7 +949,13 @@
           "g": "insurance"
         }
       ],
-      "members": []
+      "members": [],
+      "settings": {
+        "theme": 2,
+        "fs": 16,
+        "fx": "none",
+        "dark": false
+      }
     }
   ]
 }
