@@ -290,7 +290,7 @@ function buildThailandTrip() {
 }
 const COVER_KYUSHU = 'assets/covers/kyushu.png?v=5';
 const COVER_BANGKOK = 'assets/covers/bangkok.png?v=5';
-const SEED_VER = 7;
+const SEED_VER = 8;
 
 function renameTripTitles() {
   let changed = false;
@@ -561,6 +561,66 @@ const STICKERS = {
   shop: { name: '購物貓' }, bags: { name: '手袋貓' }, girl: { name: '女仔' }
 };
 const stkHTML = k => { const a = STICKERS[k] || {}; return a.src ? `<img src="${a.src}" alt="${a.name || k}" draggable="false">` : cat(k); };
+/* dog vs cat sticker sets — Bangkok uses dogs; Kyushu keeps cats-first */
+const DOG_STICKER_RE = /^(dog\d+|pet)/i;
+const isDogStickerKey = k => DOG_STICKER_RE.test(k);
+const BKK_DAY_DOGS = ['petWt', 'petChoco', 'petChaimaru', 'dog01', 'dog02', 'dog09', 'dog03', 'petWt2'];
+const CAT_TO_DOG = {
+  maneki: 'petWt', sakura: 'petChoco', ramen: 'dog01', bowl: 'dog02',
+  shop: 'dog03', bags: 'dog04', girl: 'petChaimaru',
+  jp01: 'dog01', jp02: 'dog02', jp03: 'dog10', jp04: 'dog05',
+  jp05: 'dog06', jp06: 'dog11', jp07: 'dog09', jp08: 'dog08',
+  th01: 'petWt', th02: 'petChoco', th03: 'dog03', th04: 'dog02',
+  th05: 'dog07', th06: 'petChaimaru'
+};
+function stickerKeysForTrip(t) {
+  const keys = Object.keys(STICKERS);
+  const dogs = keys.filter(isDogStickerKey);
+  const cats = keys.filter(k => !isDogStickerKey(k));
+  /* 曼谷：只顯示狗＋自家寵物；九州／其他：貓先、狗仍可選 */
+  if (isBangkokTrip(t)) return dogs.length ? dogs : keys;
+  return cats.concat(dogs);
+}
+function dayDecorKey(t, d, dayIdx) {
+  const i = dayIdx == null ? 0 : dayIdx;
+  if (isBangkokTrip(t)) {
+    if (d && d.cat && isDogStickerKey(d.cat) && STICKERS[d.cat]) return d.cat;
+    if (d && d.cat && CAT_TO_DOG[d.cat]) return CAT_TO_DOG[d.cat];
+    return BKK_DAY_DOGS[i % BKK_DAY_DOGS.length];
+  }
+  return (d && d.cat) || 'maneki';
+}
+function migrateBangkokStickers() {
+  let changed = false;
+  (APP.trips || []).forEach(t => {
+    if (!isBangkokTrip(t)) return;
+    (t.days || []).forEach((d, i) => {
+      const want = BKK_DAY_DOGS[i % BKK_DAY_DOGS.length];
+      if (!d.cat || !isDogStickerKey(d.cat)) {
+        d.cat = (d.cat && CAT_TO_DOG[d.cat]) || want;
+        changed = true;
+      }
+      if (Array.isArray(d.stickers)) {
+        d.stickers.forEach(s => {
+          if (!s || !s.k) return;
+          if (!isDogStickerKey(s.k)) {
+            s.k = CAT_TO_DOG[s.k] || want;
+            changed = true;
+          }
+        });
+      }
+    });
+  });
+  return changed;
+}
+/* STICKERS 定義後先跑一次：曼谷日卡／已貼貓轉狗 */
+(function(){
+  try {
+    if (typeof APP !== 'undefined' && APP && migrateBangkokStickers()) persist();
+  } catch (e) {}
+})();
+
+
 function stkApplyTransform(el, xPct, yPx, r, layerW) {
   const px = (xPct / 100) * layerW;
   el.style.transform = `translate3d(${px}px, ${yPx}px, 0) rotate(${r || 0}deg)`;
@@ -637,7 +697,8 @@ function renderStickers(d) {
 }
 function openStickerPicker() {
   const g = document.getElementById('stkGrid');
-  g.innerHTML = Object.keys(STICKERS).map(k => `<button class="sticker" data-k="${k}" aria-label="${STICKERS[k].name}">${stkHTML(k)}</button>`).join('');
+  const keys = stickerKeysForTrip(typeof trip !== 'undefined' ? trip : getTrip());
+  g.innerHTML = keys.map(k => `<button class="sticker" data-k="${k}" aria-label="${STICKERS[k].name}">${stkHTML(k)}</button>`).join('');
   g.querySelectorAll('button').forEach(b => b.onclick = () => {
     const d = days[currentDay]; d.stickers = d.stickers || [];
     d.stickers.push({ k: b.dataset.k, x: 35 + Math.random() * 20, y: 140 + Math.random() * 60, r: 0 });
@@ -929,7 +990,7 @@ function showDay(i) {
         <div class="day-title">Day ${i + 1} ${escH(d.title || '')}</div>
         ${d.route ? `<div class="day-route">✓ ${escH(d.route)}</div>` : ''}
       </div>
-      <div class="sticker bob" style="width:112px;height:112px;flex:none;margin-top:-6px">${cat(d.cat || 'maneki')}</div>
+      <div class="sticker bob" style="width:112px;height:112px;flex:none;margin-top:-6px">${stkHTML(dayDecorKey(trip, d, i))}</div>
     </div>
     <div class="day-spend"><span>今日預計花費</span><b>${spend ? spend.toLocaleString('en-US') + ' ' + cur : '—'}</b></div>
     ${d.hotel ? `<a class="hotel" href="${gmap(d.hq || d.hotel)}" target="_blank" rel="noopener">${ic('bed')}<span>${escH(d.hotel)}</span>${ic('pin')}</a>` : ''}
@@ -938,7 +999,7 @@ function showDay(i) {
     <div class="add-row" style="margin-top:10px">
       <button class="btn" id="addActBtn" style="flex:1">＋ 新增活動</button>
     </div>
-    <button class="ghost stk-btn" id="stkOpen">🐾 選擇貼紙</button>
+    <button class="ghost stk-btn" id="stkOpen">${isBangkokTrip(trip) ? '🐶 選擇狗貼紙' : '🐾 選擇貼紙'}</button>
     <div class="stk-layer" id="stkLayer"></div>`;
   renderStickers(d);
   const list = document.getElementById('actList');

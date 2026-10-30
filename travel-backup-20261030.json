@@ -794,22 +794,26 @@
         {
           "date": "2026-12-24",
           "title": "",
-          "items": []
+          "items": [],
+          "cat": "petWt"
         },
         {
           "date": "2026-12-25",
           "title": "",
-          "items": []
+          "items": [],
+          "cat": "petChoco"
         },
         {
           "date": "2026-12-26",
           "title": "",
-          "items": []
+          "items": [],
+          "cat": "petChaimaru"
         },
         {
           "date": "2026-12-27",
           "title": "",
-          "items": []
+          "items": [],
+          "cat": "dog01"
         }
       ],
       "bookings": {
