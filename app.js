@@ -17,7 +17,8 @@ const IC = {
   wallet: '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
   bag: '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18M16 10a4 4 0 0 1-8 0"/>',
   box: '<path d="M21 8 12 3 3 8v8l9 5 9-5Z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
-  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  people: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>'
 };
 const ic = (n, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24">${IC[n]}</svg>`;
 document.querySelectorAll('[data-i]').forEach(e => e.innerHTML = IC[e.dataset.i]);
@@ -320,8 +321,18 @@ function buildThailandTrip() {
 }
 const COVER_KYUSHU = 'assets/covers/kyushu.png?v=5';
 const COVER_BANGKOK = 'assets/covers/bangkok.png?v=8';
-const DEFAULT_MEMBERS_CHA = [{ id: 'm-cha', name: 'CHA', role: '旅客' }];
-const SEED_VER = 9;
+const DEFAULT_AVATARS = [
+  { src: 'assets/stickers/sticker-jp-01.png', label: '啡虎斑' },
+  { src: 'assets/stickers/sticker-jp-03.png', label: '黑貓' },
+  { src: 'assets/stickers/sticker-jp-06.png', label: '橘貓' },
+  { src: 'assets/stickers/sticker-jp-08.png', label: '暹羅' },
+  { src: 'assets/stickers/pets/sticker-dog-white-tan.png', label: '白啡狗' },
+  { src: 'assets/stickers/pets/sticker-dog-chocolate.png', label: '朱古力狗' },
+  { src: 'assets/stickers/pets/sticker-dog-chaimaru.png', label: '柴丸' },
+  { src: 'assets/stickers/sticker-dog-01.png', label: '柴犬' }
+];
+const DEFAULT_MEMBERS_CHA = [{ id: 'm-cha', name: 'CHA', role: '旅客', avatar: 'assets/stickers/pets/sticker-dog-white-tan.png' }];
+const SEED_VER = 10;
 
 function renameTripTitles() {
   let changed = false;
@@ -429,6 +440,17 @@ function ensurePartyMembers() {
         changed = true;
       }
     }
+    (t.members || []).forEach((m, i) => {
+      if (!m) return;
+      if (!m.id) { m.id = uid('m'); changed = true; }
+      if (m.role == null) { m.role = '旅客'; changed = true; }
+      if (!m.avatar) {
+        m.avatar = isBangkokTrip(t)
+          ? 'assets/stickers/pets/sticker-dog-white-tan.png'
+          : (DEFAULT_AVATARS[i % 4] && DEFAULT_AVATARS[i % 4].src) || DEFAULT_AVATARS[0].src;
+        changed = true;
+      }
+    });
     const b = t.bookings;
     if (!b || Array.isArray(b)) return;
     const guest = (t.members[0] && t.members[0].name) || 'CHA';
@@ -437,10 +459,18 @@ function ensurePartyMembers() {
     (b.flights || []).forEach(f => {
       if (f.people == null || +f.people === 0) { f.people = pax; changed = true; }
       if (!f.guest) { f.guest = guest; changed = true; }
+      if (!Array.isArray(f.memberIds)) {
+        f.memberIds = (t.members || []).slice(0, Math.min(pax, (t.members || []).length)).map(m => m.id);
+        if (f.memberIds.length) changed = true;
+      }
     });
     (b.stays || []).forEach(st => {
       if (st.people == null || +st.people === 0) { st.people = pax; changed = true; }
       if (!st.guest) { st.guest = guest; changed = true; }
+      if (!Array.isArray(st.memberIds)) {
+        st.memberIds = (t.members || []).slice(0, Math.min(pax, (t.members || []).length)).map(m => m.id);
+        if (st.memberIds.length) changed = true;
+      }
     });
   });
   return changed;
@@ -1215,9 +1245,13 @@ function tick() {
 tick(); setInterval(tick, 1000);
 
 /* ---------- tabs / nav ---------- */
+const navEl = document.getElementById('nav');
+if (navEl) navEl.classList.add('nav-dense');
 document.querySelectorAll('#nav button').forEach(b => b.onclick = () => {
   document.querySelectorAll('#nav button').forEach(x => x.classList.toggle('active', x === b));
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === b.dataset.v));
+  if (b.dataset.v === 'v-members' && typeof renderMembers === 'function') renderMembers();
+  if (b.dataset.v === 'v-budget' && typeof renderBudget === 'function') renderBudget();
   window.scrollTo({ top: 0 });
 });
 /* page decorations — Kyushu: decor cats; Bangkok: dogs only (tabs 預算/購物/準備/預約) */
@@ -1249,6 +1283,210 @@ function applyPageDecor(t) {
 }
 applyPageDecor(typeof trip !== 'undefined' ? trip : getTrip());
 
+
+/* ---------- members (Station 8a, local only) ---------- */
+function memAvatarHTML(m, cls) {
+  const av = (m && m.avatar) ? String(m.avatar) : '';
+  if (av) return `<span class="mem-av ${cls || ''}"><img src="${escH(av)}" alt=""></span>`;
+  return `<span class="mem-av ${cls || ''}">👤</span>`;
+}
+function partyAvHTML(m) {
+  const av = (m && m.avatar) ? String(m.avatar) : '';
+  if (av) return `<span class="party-av"><img src="${escH(av)}" alt=""></span>`;
+  return `<span class="party-av">👤</span>`;
+}
+function shrinkAvatarFile(file) {
+  return new Promise(res => {
+    if (!file) return res('');
+    const fr = new FileReader();
+    fr.onerror = () => res('');
+    fr.onload = () => {
+      const im = new Image();
+      im.onerror = () => res('');
+      im.onload = () => {
+        const max = 200;
+        const k = Math.min(1, max / Math.max(im.width, im.height));
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(im.width * k));
+        c.height = Math.max(1, Math.round(im.height * k));
+        c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+        res(c.toDataURL('image/jpeg', 0.85));
+      };
+      im.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+function getTripMembers() {
+  const t = (typeof trip !== 'undefined' && trip) ? trip : getTrip();
+  if (!t.members) t.members = [];
+  return t.members;
+}
+function saveMembers() {
+  const t = (typeof trip !== 'undefined' && trip) ? trip : getTrip();
+  t.members = getTripMembers();
+  saveTrip(t);
+  if (typeof renderBookings === 'function') renderBookings();
+  if (typeof renderBudget === 'function') renderBudget();
+  renderPartyCard();
+}
+let memEdit = null, memPendingAv = '';
+function fillAvPresets(selected) {
+  const box = $('memAvPresets');
+  if (!box) return;
+  box.innerHTML = DEFAULT_AVATARS.map(a => {
+    const on = selected === a.src ? ' on' : '';
+    return `<button type="button" class="${on.trim()}" data-src="${escH(a.src)}" title="${escH(a.label)}" aria-label="${escH(a.label)}"><img src="${escH(a.src)}" alt=""></button>`;
+  }).join('');
+  box.querySelectorAll('button').forEach(b => b.onclick = () => {
+    memPendingAv = b.dataset.src;
+    const prev = $('memAvPreview');
+    if (prev) prev.innerHTML = `<img src="${escH(memPendingAv)}" alt="">`;
+    box.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+    $('memAvNote').textContent = '已揀預設頭像';
+  });
+}
+function setMemPreview(src) {
+  const prev = $('memAvPreview');
+  if (!prev) return;
+  if (src) prev.innerHTML = `<img src="${escH(src)}" alt="">`;
+  else prev.textContent = '👤';
+}
+function openMemModal(edit) {
+  memEdit = edit;
+  memPendingAv = edit && edit.avatar ? edit.avatar : (isBangkokTrip(getTrip()) ? DEFAULT_AVATARS[4].src : DEFAULT_AVATARS[0].src);
+  $('memTitle').textContent = edit ? '編輯成員' : '新增成員';
+  $('memName').value = edit ? (edit.name || '') : '';
+  $('memRole').value = edit ? (edit.role || '') : '旅客';
+  $('memErr').textContent = '';
+  $('memAvNote').textContent = '約 200px，自動縮細';
+  setMemPreview(memPendingAv);
+  fillAvPresets(memPendingAv);
+  $('memModal').hidden = false;
+  setTimeout(() => $('memName').focus(), 50);
+}
+function renderMembers() {
+  const list = $('memList');
+  if (!list) return;
+  const mem = getTripMembers();
+  const t = getTrip();
+  if (!mem.length) {
+    list.innerHTML = '<div class="card empty">未有成員。撳上面「新增成員」開始。</div>';
+  } else {
+    list.innerHTML = '';
+    mem.forEach((m, idx) => {
+      const card = document.createElement('div');
+      card.className = 'card mem-card';
+      card.innerHTML = `${memAvatarHTML(m)}<div class="mem-info"><b></b><small></small></div><div class="mem-acts"><button type="button" class="ghost sm" data-a="edit">編輯</button><button type="button" class="ghost sm danger-text" data-a="del">刪除</button></div>`;
+      card.querySelector('b').textContent = m.name || '未命名';
+      card.querySelector('small').textContent = m.role || '旅客';
+      card.querySelector('[data-a="edit"]').onclick = () => openMemModal(m);
+      card.querySelector('[data-a="del"]').onclick = () => {
+        confirmAsk(`刪除成員「${m.name || ''}」？相關預約分攤同支出付款人會一併清走標記。`, () => {
+          const id = m.id;
+          t.members = (t.members || []).filter(x => x.id !== id);
+          const b = t.bookings;
+          if (b && !Array.isArray(b)) {
+            [...(b.flights || []), ...(b.stays || [])].forEach(x => {
+              if (Array.isArray(x.memberIds)) x.memberIds = x.memberIds.filter(mid => mid !== id);
+            });
+          }
+          (t.budget && t.budget.expenses || []).forEach(e => { if (e.payerId === id) e.payerId = ''; });
+          if (typeof trip !== 'undefined' && trip && trip.id === t.id) {
+            trip.members = t.members;
+            if (trip.budget) trip.budget.expenses = t.budget.expenses;
+          }
+          saveMembers();
+          renderMembers();
+        });
+      };
+      list.appendChild(card);
+    });
+  }
+  renderSettlement();
+  let hint = $('memHint');
+  if (hint) {
+    if (isBangkokTrip(t) && mem.length < 2) {
+      hint.textContent = '曼谷預約係 2 人；Outlook 未見第二位姓名，可喺呢度自行加「旅伴」。雲端同步係第 8b 站（未做）。';
+    } else {
+      hint.textContent = '頭像可以上載或者揀預設貓／狗。雲端同步係第 8b 站（未做）。';
+    }
+  }
+}
+function renderSettlement() {
+  const card = $('settleCard'), box = $('settleList');
+  if (!card || !box) return;
+  const mem = getTripMembers();
+  const t = (typeof trip !== 'undefined' && trip) ? trip : getTrip();
+  let live = (t.budget && t.budget.expenses) || [];
+  try { if (typeof exps !== 'undefined' && Array.isArray(exps)) live = exps; } catch (e) {}
+  if (mem.length < 2 || !live.length) { card.hidden = true; return; }
+  const withPayer = live.filter(e => e && e.payerId && +e.hkd > 0);
+  if (!withPayer.length) { card.hidden = true; return; }
+  const total = withPayer.reduce((s, e) => s + (+e.hkd || 0), 0);
+  const fair = total / mem.length;
+  card.hidden = false;
+  box.innerHTML = mem.map(m => {
+    const paid = withPayer.filter(e => e.payerId === m.id).reduce((s, e) => s + (+e.hkd || 0), 0);
+    const diff = paid - fair;
+    let tag;
+    if (Math.abs(diff) < 0.5) tag = '<span class="ok">剛好</span>';
+    else if (diff > 0) tag = `<span class="ok">應收 $${Math.round(diff)}</span>`;
+    else tag = `<span class="due">應付 $${Math.round(-diff)}</span>`;
+    return `<div class="settle-row"><span>${escH(m.name)} · 已付 $${Math.round(paid)}／應付 $${Math.round(fair)}</span>${tag}</div>`;
+  }).join('') + `<p class="hint" style="margin:8px 0 0">只計有標付款人嘅支出，總計 HKD $${Math.round(total)}</p>`;
+}
+if ($('memAddBtn')) $('memAddBtn').onclick = () => openMemModal(null);
+if ($('memCancel')) $('memCancel').onclick = () => { $('memModal').hidden = true; };
+if ($('memAvFile')) $('memAvFile').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  const data = await shrinkAvatarFile(f);
+  if (!data) { $('memAvNote').textContent = '讀唔到張相'; return; }
+  memPendingAv = data;
+  setMemPreview(data);
+  $('memAvNote').textContent = '已上載並縮細';
+  fillAvPresets('');
+};
+if ($('memSave')) $('memSave').onclick = () => {
+  const name = $('memName').value.trim();
+  if (!name) { $('memErr').textContent = '請填名稱'; return; }
+  const role = $('memRole').value.trim() || '旅客';
+  const t = getTrip();
+  if (!Array.isArray(t.members)) t.members = [];
+  if (memEdit) {
+    memEdit.name = name; memEdit.role = role; memEdit.avatar = memPendingAv || memEdit.avatar || '';
+  } else {
+    t.members.push({ id: uid('m'), name, role, avatar: memPendingAv || DEFAULT_AVATARS[0].src });
+  }
+  if (typeof trip !== 'undefined' && trip && trip.id === t.id) trip.members = t.members;
+  saveMembers();
+  $('memModal').hidden = true;
+  renderMembers();
+};
+function renderPartyCard() {
+  if (!$('partyList')) return;
+  const tt = getTrip();
+  const mem = (tt.members || []).filter(m => m && m.name);
+  let pax = 0;
+  const bb = tt.bookings;
+  if (bb && !Array.isArray(bb)) [...(bb.flights || []), ...(bb.stays || [])].forEach(x => { pax = Math.max(pax, +x.people || 0); });
+  if (!pax) pax = mem.length;
+  const ps = $('partySub');
+  if (ps) ps.textContent = pax ? (`呢個旅程 · ${pax} 人`) : '呢個旅程嘅旅客';
+  const pl = $('partyList');
+  if (!mem.length && !pax) pl.innerHTML = '<p class="hint" style="margin:0">未有人員——去「成員」分頁新增</p>';
+  else {
+    const rows = mem.map(m => `<div class="party-row">${partyAvHTML(m)}<div><b>${escH(m.name)}</b><small>${escH(m.role || '旅客')}</small></div></div>`).join('');
+    const extra = (pax > mem.length) ? `<p class="hint" style="margin:8px 0 0">預約顯示共 ${pax} 人（Outlook 未見第二位姓名）</p>` : '';
+    pl.innerHTML = rows + extra;
+  }
+}
+if ($('partyGoMem')) $('partyGoMem').onclick = () => {
+  const btn = document.querySelector('#nav button[data-v="v-members"]');
+  if (btn) btn.click();
+};
+
 /* ---------- bookings CRUD (4b) ---------- */
 let bkKind = 'flight', bkEdit = null, bkPendingFile = null, bkFilter = 'all';
 function fmtBkDate(s) {
@@ -1260,6 +1498,41 @@ function stayDatesLabel(s) {
   if (s.checkIn && s.checkOut) return `${s.checkIn.slice(5).replace('-','/')} – ${s.checkOut.slice(5).replace('-','/')}`;
   return s.dates || '';
 }
+function fillBkMemberPick(edit) {
+  const box = $('bkMemberPick');
+  if (!box) return;
+  const mem = getTripMembers();
+  let selected = (edit && Array.isArray(edit.memberIds)) ? edit.memberIds.slice() : [];
+  if (!selected.length && edit && edit.guest) {
+    const names = String(edit.guest).split(/[、,，]/).map(s => s.trim()).filter(Boolean);
+    selected = mem.filter(m => names.includes(m.name)).map(m => m.id);
+  }
+  if (!selected.length && !edit && mem.length) selected = [mem[0].id];
+  if (!mem.length) {
+    box.innerHTML = '<p class="hint" style="margin:0">未有成員——去「成員」分頁新增後可喺呢度勾選</p>';
+    return;
+  }
+  box.innerHTML = mem.map(m => {
+    const on = selected.includes(m.id);
+    const av = m.avatar ? `<span class="chip-av"><img src="${escH(m.avatar)}" alt=""></span>` : '<span class="chip-av">👤</span>';
+    return `<label class="mem-chip${on ? ' on' : ''}"><input type="checkbox" value="${escH(m.id)}"${on ? ' checked' : ''}>${av}<span>${escH(m.name)}</span></label>`;
+  }).join('');
+  const syncPeople = () => {
+    const ids = [...box.querySelectorAll('input:checked')].map(i => i.value);
+    box.querySelectorAll('.mem-chip').forEach(lab => lab.classList.toggle('on', lab.querySelector('input').checked));
+    if (ids.length) $('bkPeople').value = ids.length;
+  };
+  box.querySelectorAll('input').forEach(inp => inp.onchange = syncPeople);
+}
+function selectedBkMemberIds() {
+  const box = $('bkMemberPick');
+  if (!box) return [];
+  return [...box.querySelectorAll('input:checked')].map(i => i.value);
+}
+function guestLabelFromIds(ids) {
+  const mem = getTripMembers();
+  return ids.map(id => { const m = mem.find(x => x.id === id); return m ? m.name : ''; }).filter(Boolean).join('、');
+}
 function openBkModal(kind, edit) {
   bkKind = kind; bkEdit = edit; bkPendingFile = null;
   $('bkTitle').textContent = edit ? (kind === 'flight' ? '編輯機票' : '編輯住宿') : (kind === 'flight' ? '新增機票' : '新增住宿');
@@ -1270,6 +1543,7 @@ function openBkModal(kind, edit) {
   $('bkNote').value = edit ? (edit.note || edit.meta || '') : '';
   $('bkAmt').value = edit && edit.amount ? edit.amount : '';
   $('bkPeople').value = edit && edit.people ? edit.people : 1;
+  fillBkMemberPick(edit);
   if (kind === 'flight') {
     $('bkFlightNo').value = edit ? (edit.flightNo || '') : '';
     $('bkFrom').value = edit ? (edit.from || '') : '';
@@ -1298,6 +1572,8 @@ $('bkSave').onclick = async () => {
   if (bkKind === 'flight') {
     const flightNo = $('bkFlightNo').value.trim(), from = $('bkFrom').value.trim().toUpperCase(), to = $('bkTo').value.trim().toUpperCase();
     if (!flightNo || !from || !to) return $('bkErr').textContent = '請填航班編號同機場';
+    const memberIds = selectedBkMemberIds();
+    const peopleN = memberIds.length ? memberIds.length : Math.max(1, +$('bkPeople').value || 1);
     const o = {
       id: bkEdit ? bkEdit.id : uid('f'),
       flightNo, from, to,
@@ -1306,7 +1582,9 @@ $('bkSave').onclick = async () => {
       route: `${from} → ${to}`,
       note: $('bkNote').value.trim(),
       amount: +$('bkAmt').value || 0,
-      people: Math.max(1, +$('bkPeople').value || 1),
+      people: peopleN,
+      memberIds,
+      guest: guestLabelFromIds(memberIds) || (bkEdit && bkEdit.guest) || '',
       fileId: bkEdit ? (bkEdit.fileId || '') : ''
     };
     if (bkPendingFile) {
@@ -1319,6 +1597,8 @@ $('bkSave').onclick = async () => {
   } else {
     const name = $('bkName').value.trim();
     if (!name) return $('bkErr').textContent = '請填酒店名稱';
+    const memberIds = selectedBkMemberIds();
+    const peopleN = memberIds.length ? memberIds.length : Math.max(1, +$('bkPeople').value || 1);
     const o = {
       id: bkEdit ? bkEdit.id : uid('s'),
       name,
@@ -1329,7 +1609,9 @@ $('bkSave').onclick = async () => {
       note: $('bkNote').value.trim(),
       meta: $('bkAddr').value.trim() || $('bkNote').value.trim(),
       amount: +$('bkAmt').value || 0,
-      people: Math.max(1, +$('bkPeople').value || 1),
+      people: peopleN,
+      memberIds,
+      guest: guestLabelFromIds(memberIds) || (bkEdit && bkEdit.guest) || '',
       fileId: bkEdit ? (bkEdit.fileId || '') : ''
     };
     o.dates = stayDatesLabel(o);
@@ -1508,14 +1790,28 @@ autoMergeEl.onclick = () => {
   autoMergeEl.classList.toggle('on', on);
   setSetting('autoMerge', on); renderBudget();
 };
-$('expToggle').onclick = () => { $('expPanel').hidden = !$('expPanel').hidden; };
+function fillExpPayer(selected) {
+  const sel = $('expPayer');
+  if (!sel) return;
+  const mem = (typeof getTripMembers === 'function') ? getTripMembers() : ((trip && trip.members) || []);
+  const cur = selected || sel.value || '';
+  sel.innerHTML = '<option value="">付款人（可選）</option>' + mem.map(m =>
+    `<option value="${escH(m.id)}"${m.id === cur ? ' selected' : ''}>${escH(m.name)}</option>`
+  ).join('');
+}
+$('expToggle').onclick = () => {
+  const p = $('expPanel'); p.hidden = !p.hidden;
+  if (!p.hidden) fillExpPayer('');
+};
 $('expAdd').onclick = () => {
   const a = +$('expAmt').value, cur = $('expCur').value, cat = $('expCat').value;
   if (!(a > 0)) { $('expAmt').focus(); return; }
   const n = $('expName').value.trim() || CATS.find(c => c[0] === cat)[1];
-  exps.unshift({ id: Date.now(), n, a, cur, hkd: cur === 'HKD' ? a : a * rate, cat });
+  const payerId = ($('expPayer') && $('expPayer').value) || '';
+  exps.unshift({ id: Date.now(), n, a, cur, hkd: cur === 'HKD' ? a : a * rate, cat, payerId });
   saveBudget();
-  $('expName').value = ''; $('expAmt').value = ''; $('expPanel').hidden = true;
+  $('expName').value = ''; $('expAmt').value = ''; if ($('expPayer')) $('expPayer').value = '';
+  $('expPanel').hidden = true;
   renderBudget();
 };
 function activityMerged() {
@@ -1558,13 +1854,20 @@ function renderBudget() {
     const r = document.createElement('div');
     r.className = 'exp';
     const curLab = e.cur === 'HKD' ? 'HKD' : (e.cur || curCode()) + ' ' + Math.round(e.a).toLocaleString('en-US');
-    r.innerHTML = `<div class="cat-ic">${ic(c[2])}</div><div class="exp-m"><div class="exp-n"></div><div class="exp-s">${c[1]}${e.auto ? ' · 自動' : ''}</div></div><div class="exp-a"><b>${money(e.hkd)}</b><small>${curLab}</small></div>${e.auto ? '' : '<button class="del" aria-label="刪除">×</button>'}`;
+    let payerLab = '';
+    if (e.payerId && typeof getTripMembers === 'function') {
+      const pm = getTripMembers().find(m => m.id === e.payerId);
+      if (pm) payerLab = ' · ' + pm.name + '付';
+    }
+    r.innerHTML = `<div class="cat-ic">${ic(c[2])}</div><div class="exp-m"><div class="exp-n"></div><div class="exp-s">${c[1]}${e.auto ? ' · 自動' : ''}${payerLab ? escH(payerLab) : ''}</div></div><div class="exp-a"><b>${money(e.hkd)}</b><small>${curLab}</small></div>${e.auto ? '' : '<button class="del" aria-label="刪除">×</button>'}`;
     r.querySelector('.exp-n').textContent = e.n;
     const del = r.querySelector('.del');
     if (del) del.onclick = () => { exps = exps.filter(x => x.id !== e.id); saveBudget(); renderBudget(); };
     box.appendChild(r);
   });
+  if (typeof renderSettlement === 'function') renderSettlement();
 }
+fillExpPayer('');
 renderBudget();
 
 /* ---------- shop + todo (separate tabs) ---------- */
@@ -1960,22 +2263,7 @@ if ($('setHint') && isInTripView()) {
   $('setHint').textContent = `「${tt.title}」專用設定 · 切換旅程唔會跟住改`;
   const sub = document.querySelector('#v-set .page-sub');
   if (sub) sub.textContent = '只影響呢個旅程嘅樣';
-  const pl = $('partyList');
-  const ps = $('partySub');
-  if (pl) {
-    const mem = (tt.members || []).filter(m => m && m.name);
-    let pax = 0;
-    const bb = tt.bookings;
-    if (bb && !Array.isArray(bb)) [...(bb.flights || []), ...(bb.stays || [])].forEach(x => { pax = Math.max(pax, +x.people || 0); });
-    if (!pax) pax = mem.length;
-    if (ps) ps.textContent = pax ? (`呢個旅程 · ${pax} 人`) : '呢個旅程嘅旅客';
-    if (!mem.length && !pax) pl.innerHTML = '<p class="hint" style="margin:0">未有人員資料（完整成員分頁喺路線圖第 8 站）</p>';
-    else {
-      const rows = mem.map(m => `<div class="party-row"><span class="party-av">👤</span><div><b>${escH(m.name)}</b><small>${escH(m.role || '旅客')}</small></div></div>`).join('');
-      const extra = (pax > mem.length) ? `<p class="hint" style="margin:8px 0 0">預約顯示共 ${pax} 人（Outlook 未見第二位姓名）</p>` : '';
-      pl.innerHTML = rows + extra;
-    }
-  }
+  if (typeof renderPartyCard === 'function') renderPartyCard();
 }
 
 /* CSS for toggle.on */

@@ -54,6 +54,24 @@
   <div class="tm-btns"><button class="ghost" id="tmCancel">取消</button><button class="btn" id="tmSave">儲存</button></div>
 </div></div>
 <div class="modal" id="confirmModal" hidden><div class="modal-card card"><h3 id="cfTitle">確認</h3><p id="cfMsg"></p><div class="tm-btns"><button class="ghost" id="cfNo">取消</button><button class="btn danger" id="cfYes">確認</button></div></div></div>
+<div class="modal" id="memModal" hidden><div class="modal-card card sheet">
+  <h3 id="memTitle">新增成員</h3>
+  <div class="mem-av-edit">
+    <div class="mem-av lg" id="memAvPreview">👤</div>
+    <div class="mem-av-acts">
+      <div class="photo-pick" style="margin:0">
+        <label for="memAvFile">📷 上載頭像</label>
+        <input type="file" id="memAvFile" accept="image/*" hidden>
+        <span id="memAvNote">約 200px，自動縮細</span>
+      </div>
+      <div class="av-presets" id="memAvPresets"></div>
+    </div>
+  </div>
+  <label>名稱<input class="fld" id="memName" maxlength="20" placeholder="例如 CHA"></label>
+  <label>角色<input class="fld" id="memRole" maxlength="20" placeholder="例如 行程規劃、財政大臣"></label>
+  <div class="tm-err" id="memErr"></div>
+  <div class="tm-btns"><button class="ghost" id="memCancel">取消</button><button class="btn" id="memSave">儲存</button></div>
+</div></div>
 <div class="modal" id="stkModal" hidden><div class="modal-card card"><h3>選擇貼紙</h3><div class="stk-grid" id="stkGrid"></div><p class="hint" style="margin:8px 0 0">單擊拖動・雙擊旋轉・撳 × 刪除</p><div class="tm-btns"><button class="ghost" id="stkClose">完成</button></div></div></div>
 
 <div class="modal" id="actModal" hidden><div class="modal-card card sheet">
@@ -96,6 +114,9 @@
   </div>
   <label>預約名稱／備註<input class="fld" id="bkNote" maxlength="80" placeholder="可選"></label>
   <div class="tm-row"><label>金額<input class="fld" id="bkAmt" type="number" inputmode="decimal" placeholder="0"></label><label>分攤人數<input class="fld" id="bkPeople" type="number" min="1" value="1"></label></div>
+  <div class="tm-lab">分攤成員（可多選）</div>
+  <div class="mem-chips" id="bkMemberPick"></div>
+  <p class="hint" style="margin:4px 0 8px">揀咗成員會自動更新人數同人員顯示</p>
   <div class="photo-pick">
     <label for="bkFile">📎 上載 PDF／相片</label>
     <input type="file" id="bkFile" accept="image/*,application/pdf" hidden>
@@ -178,6 +199,7 @@
         <input class="fld" id="expAmt" type="number" inputmode="decimal" placeholder="金額">
         <select class="fld" id="expCur"></select>
         <select class="fld" id="expCat"></select>
+        <select class="fld" id="expPayer" style="grid-column:1/-1"><option value="">付款人（可選）</option></select>
       </div>
       <button class="btn" id="expAdd" style="width:100%;margin-top:12px">加入記錄</button>
     </div>
@@ -236,6 +258,24 @@
     <p class="hint" id="wxHint">資料來自 Open-Meteo；標「季節參考」唔係即時預報</p>
   </section>
 
+
+  <section class="view" id="v-members">
+    <div class="page-head">
+      <h1 class="page">成員</h1>
+      <div class="page-sub">呢個旅程嘅同行夥伴</div>
+    </div>
+    <div class="add-row" style="margin-bottom:14px">
+      <button class="btn" id="memAddBtn" style="flex:1">＋ 新增成員</button>
+    </div>
+    <div id="memList"></div>
+    <div class="card" id="settleCard" style="margin-top:14px" hidden>
+      <div class="sec-title">記帳結算（本機）</div>
+      <p class="hint" style="margin:0 0 10px">按支出「付款人」同人數平均分攤；未標付款人嘅支出唔計入已付。</p>
+      <div id="settleList"></div>
+    </div>
+    <p class="hint" id="memHint">頭像可以上載或者揀預設貓／狗。雲端同步係第 8b 站（未做）。</p>
+  </section>
+
   <section class="view" id="v-set">
     <div class="page-head"><h1 class="page">設定</h1><div class="page-sub">只影響呢個旅程嘅樣</div></div>
     <div class="card">
@@ -260,6 +300,7 @@
     <div class="card" id="partyCard">
       <div class="set-h"><div class="ci">👥</div><div><b>人員</b><small id="partySub">呢個旅程嘅旅客</small></div></div>
       <div id="partyList" style="margin-top:10px"></div>
+      <button type="button" class="btn ghost" id="partyGoMem" style="width:100%;margin-top:10px">去「成員」分頁管理</button>
     </div>
     <div class="card">
       <div class="set-h"><div class="ci">💾</div><div><b>備份同還原</b><small>匯出／匯入旅程資料（JSON）</small></div></div>
@@ -284,6 +325,7 @@
   <button data-v="v-shop"><svg class="ic" viewBox="0 0 24 24" data-i="bag"></svg>購物</button>
   <button data-v="v-todo"><svg class="ic" viewBox="0 0 24 24" data-i="check"></svg>準備</button>
   <button data-v="v-weather"><svg class="ic" viewBox="0 0 24 24" data-i="cloud"></svg>天氣</button>
+  <button data-v="v-members"><svg class="ic" viewBox="0 0 24 24" data-i="people"></svg>成員</button>
   <button data-v="v-set"><svg class="ic" viewBox="0 0 24 24" data-i="gear"></svg>設定</button>
 </nav>
 </body>
