@@ -280,7 +280,7 @@ const TH_DEFAULT_SHOP = [
 function buildThailandTrip() {
   return createTrip({
     id: 't-thai', title: '曼谷小旅', destination: '曼谷', startDate: '2026-12-24', endDate: '2026-12-27',
-    currency: 'THB', cover: 'assets/covers/bangkok.png?v=4',
+    currency: 'THB', cover: 'assets/covers/bangkok.png?v=5',
     bookings: JSON.parse(JSON.stringify(TH_BOOKINGS)),
     budget: { total: 0, rate: 0.22, expenses: [] },
     shop: TH_DEFAULT_SHOP.map(x => Object.assign({}, x)),
@@ -288,9 +288,9 @@ function buildThailandTrip() {
     members: [], settings: defaultTripSettings('bangkok'), _kind: 'bangkok', _noAdd: true
   });
 }
-const COVER_KYUSHU = 'assets/covers/kyushu.png?v=4';
-const COVER_BANGKOK = 'assets/covers/bangkok.png?v=4';
-const SEED_VER = 5;
+const COVER_KYUSHU = 'assets/covers/kyushu.png?v=5';
+const COVER_BANGKOK = 'assets/covers/bangkok.png?v=5';
+const SEED_VER = 6;
 function ensureDefaultCovers() {
   let changed = false;
   (APP.trips || []).forEach(t => {
@@ -425,7 +425,7 @@ function migrate() {
   const shop = old('kz_shop2');
   const todos = old('kz_todos');
   const t1 = createTrip({
-    id: 't1', title: '九州小旅', destination: '九州', startDate: '2026-11-22', endDate: '2026-11-28', currency: 'JPY', cover: 'assets/covers/kyushu.png?v=4',
+    id: 't1', title: '九州小旅', destination: '九州', startDate: '2026-11-22', endDate: '2026-11-28', currency: 'JPY', cover: 'assets/covers/kyushu.png?v=5',
     days: toDays(Array.isArray(oldDays) && oldDays.length ? oldDays : KZ_DEFAULT_DAYS, '2026-11-22'),
     bookings: JSON.parse(JSON.stringify(KZ_BOOKINGS)),
     budget: { total: +old('kz_budget') || 0, rate: +old('kz_rate') || 0.052, expenses: Array.isArray(exps) ? exps : [] },
