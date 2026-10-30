@@ -1184,17 +1184,20 @@ function showDay(i) {
     r.innerHTML = `
       <span class="handle" title="長按拖動">⠿</span>
       <div class="dot">${ic(tm.ic)}</div>
-      <div style="flex:1;min-width:0">
+      <div class="act-main">
         <div class="tm">${escH(it.time)}${it.remind ? '<span class="bell">🔔</span>' : ''}</div>
-        <div class="tx">${escH(it.text)}${it.must ? '<span class="must">必去</span>' : ''}<span class="tag" style="margin-left:6px">${tm.label}</span></div>
+        <div class="tx">${escH(it.text)}</div>
+        ${it.must ? '<div class="act-tags"><span class="must">必去</span></div>' : ''}
         ${metaBits.length ? `<div class="meta">${escH(metaBits.join(' · '))}</div>` : ''}
       </div>
-      ${it.q ? mapLink(it.q) : ''}
-      <div style="display:flex;flex-direction:column;gap:2px;margin-left:4px">
-        <button class="up" style="font-size:.75rem;padding:1px 6px;border:1.5px solid var(--line);border-radius:8px;background:#fff" aria-label="上移">↑</button>
-        <button class="down" style="font-size:.75rem;padding:1px 6px;border:1.5px solid var(--line);border-radius:8px;background:#fff" aria-label="下移">↓</button>
+      <div class="act-side">
+      ${it.q ? mapLink(it.q) : '<span class="map-ph"></span>'}
+      <button class="del act-del" aria-label="刪除">×</button>
+      <div class="act-mv">
+        <button class="up" aria-label="上移">↑</button>
+        <button class="down" aria-label="下移">↓</button>
       </div>
-      <button class="del" style="margin-left:2px" aria-label="刪除">×</button>`;
+      </div>`;
     r.querySelector('.del').onclick = e => { e.stopPropagation(); confirmAsk('刪除呢個活動？', () => { d.items.splice(idx, 1); saveDays(); showDay(i); }); };
     r.querySelector('.up').onclick = e => { e.stopPropagation(); if (idx > 0) { [d.items[idx-1], d.items[idx]] = [d.items[idx], d.items[idx-1]]; saveDays(); showDay(i); } };
     r.querySelector('.down').onclick = e => { e.stopPropagation(); if (idx < d.items.length - 1) { [d.items[idx], d.items[idx+1]] = [d.items[idx+1], d.items[idx]]; saveDays(); showDay(i); } };

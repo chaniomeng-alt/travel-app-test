@@ -513,3 +513,34 @@ body.dark .sw-update-banner { background: #E89F9F; color: #fff; border-color: #5
 .settle-row .ok { color:#2a7a4b; font-weight:700; }
 .settle-row .due { color:#c45c5c; font-weight:700; }
 .tm-lab { font-size:.82rem; color:var(--soft); margin:8px 0 2px; font-weight:600; }
+
+/* activity card layout (mobile fix) */
+.act .act-main { flex:1 1 auto; min-width:0; }
+.act .tx { overflow-wrap:anywhere; word-break:normal; font-style:normal; }
+.act .act-tags { display:flex; flex-wrap:wrap; gap:4px; margin-top:3px; }
+.act .act-tags .must, .act .tag { display:inline-flex; align-items:center; white-space:nowrap; margin-left:0; vertical-align:middle; }
+.act .act-mv { display:flex; flex-direction:column; gap:2px; flex:none; }
+.act .act-mv button { font-size:.75rem; padding:1px 6px; border:1.5px solid var(--line); border-radius:8px; background:#fff; line-height:1.2; }
+.act .act-del { flex:none; color:var(--soft); padding:4px 6px; font-size:1.1rem; }
+.act .map { flex:none; }
+body.dark .act .act-mv button { background:#2A221C; }
+@media (max-width:420px){
+  .act { gap:6px !important; padding-left:8px !important; padding-right:6px !important; }
+  .act .handle { padding:2px 0; font-size:1rem; }
+  .act .dot { width:32px; height:32px; }
+  .act .dot svg { width:16px; height:16px; }
+  .act .act-mv button { padding:0 5px; font-size:.7rem; }
+  .act .act-del { padding:2px 3px; }
+  .act .map { width:32px; height:32px; }
+  .act .map svg { width:16px; height:16px; }
+}
+
+.act .act-side { flex:none; display:grid; grid-template-columns:auto auto; grid-template-areas:"map del" "mv mv"; align-items:center; justify-items:center; gap:4px 2px; }
+.act .act-side .map, .act .act-side .map-ph { grid-area:map; margin-left:0; }
+.act .act-side .act-del { grid-area:del; }
+.act .act-side .act-mv { grid-area:mv; flex-direction:row; gap:4px; }
+@media (max-width:420px){
+  .act { gap:5px !important; }
+  .act .act-side .map { width:30px; height:30px; }
+  .act .act-side .act-mv button { padding:0 7px; }
+}
