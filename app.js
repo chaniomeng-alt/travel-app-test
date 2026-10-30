@@ -2590,25 +2590,6 @@ function tripUpdatedAt(t) {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-/** Rough content weight — used as tie-break so we never silently drop richer local data */
-function tripRichness(t) {
-  if (!t || typeof t !== 'object') return 0;
-  let n = 0;
-  (t.days || []).forEach(d => {
-    n += 8;
-    (d && d.items || []).forEach(() => { n += 3; });
-  });
-  n += (t.shop || []).length * 2;
-  n += (t.todos || []).length * 2;
-  n += (t.members || []).length;
-  const ex = (t.budget && t.budget.expenses) || [];
-  n += ex.length * 3;
-  const fl = (t.bookings && t.bookings.flights) || [];
-  const st = (t.bookings && t.bookings.stays) || [];
-  n += fl.length * 5 + st.length * 5;
-  return n;
-}
-
 function cloudDocUpdatedAt(cdata) {
   if (!cdata) return 0;
   return +cdata.updatedAt || tripUpdatedAt(cdata.trip) || 0;
@@ -2643,7 +2624,9 @@ function adoptRemoteTrip(remoteTrip, remoteAt, cloudMeta) {
 }
 
 /**
- * Full sync: pull cloud → merge by updatedAt (richer wins on ties / protect richer local) → upload only local-newer.
+ * Full sync: pull cloud → compare trip.updatedAt only → wholesale replace (no array richness merge).
+ * Remote newer → replace local trip data entirely (shop/prep/expenses/days included).
+ * Local newer → upload entirely. Equal stamp → keep local. Missing-on-cloud synced trips → drop locally.
  * Used on login and 「立即同步」.
  */
 async function syncWithCloud() {
@@ -2668,21 +2651,8 @@ async function syncWithCloud() {
         return;
       }
       const localAt = tripUpdatedAt(local);
-      const lr = tripRichness(local);
-      const rr = tripRichness(remoteTrip);
-      let takeRemote = false;
+      /* Strict timestamp: never prefer longer/richer arrays (that resurrects deletes). */
       if (remoteAt > localAt) {
-        /* cloud newer — still keep clearly richer local (guards against earlier stamp bugs) */
-        if (lr > rr * 1.25 && (lr - rr) >= 5) {
-          local.updatedAt = Math.max(localAt, remoteAt) + 1;
-          changed = true;
-        } else {
-          takeRemote = true;
-        }
-      } else if (remoteAt === localAt && rr > lr) {
-        takeRemote = true;
-      }
-      if (takeRemote) {
         const i = APP.trips.findIndex(t => t.id === id);
         if (i >= 0) {
           APP.trips[i] = adoptRemoteTrip(remoteTrip, remoteAt, cdata);
@@ -2690,7 +2660,22 @@ async function syncWithCloud() {
           changed = true;
         }
       }
+      /* localAt >= remoteAt → keep local; push will upload if local newer */
     });
+
+    /* Whole-trip delete: previously synced local trip gone from cloud → drop local */
+    const cloudIds = new Set(cloudMap.keys());
+    const kept = [];
+    for (const t of (APP.trips || [])) {
+      if (cloudIds.has(t.id)) { kept.push(t); continue; }
+      const wasSynced = !!(t.cloudOwnerUid || (Array.isArray(t.memberUids) && t.memberUids.length));
+      if (wasSynced) {
+        changed = true;
+        continue; /* deleted on another device */
+      }
+      kept.push(t); /* never uploaded yet — keep for upload */
+    }
+    APP.trips = kept;
 
     /* Meta: activeTripId / settings from user doc if present */
     try {
@@ -2727,9 +2712,8 @@ async function syncWithCloud() {
 
   if (changed) {
     toast('已同雲端合併旅程');
-    try {
-      if (typeof renderHome === 'function') renderHome();
-    } catch (e) {}
+    /* trip/shop/days are const/let aliases to old objects — reload so UI & next upload use wholesale remote */
+    try { location.reload(); } catch (e) {}
   }
 }
 
@@ -2779,9 +2763,8 @@ async function pushLocalToCloud(fromMerge, prefetchedCloudMap) {
         continue;
       }
       if (existing && cloudAt === localAt) {
-        const rr = tripRichness(existing.trip);
-        const lr = tripRichness(t);
-        if (rr > lr) continue;
+        /* same stamp → already consistent; skip (no richness tie-break) */
+        continue;
       }
 
       const payload = {
@@ -2791,7 +2774,8 @@ async function pushLocalToCloud(fromMerge, prefetchedCloudMap) {
         trip: JSON.parse(JSON.stringify(t))
       };
       const ref = fbDb.collection('trips').doc(t.id);
-      batch.set(ref, payload, { merge: true });
+      /* wholesale trip replace — no merge that could leave stale nested fields */
+      batch.set(ref, payload);
       n++;
       uploaded++;
       if (n >= batchLimit) await commitBatch();
