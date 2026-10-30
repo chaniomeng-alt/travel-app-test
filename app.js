@@ -279,7 +279,7 @@ const TH_DEFAULT_SHOP = [
 ];
 function buildThailandTrip() {
   return createTrip({
-    id: 't-thai', title: '曼谷小旅', destination: '曼谷', startDate: '2026-12-24', endDate: '2026-12-27',
+    id: 't-thai', title: '曼谷之旅', destination: '曼谷', startDate: '2026-12-24', endDate: '2026-12-27',
     currency: 'THB', cover: 'assets/covers/bangkok.png?v=5',
     bookings: JSON.parse(JSON.stringify(TH_BOOKINGS)),
     budget: { total: 0, rate: 0.22, expenses: [] },
@@ -290,15 +290,29 @@ function buildThailandTrip() {
 }
 const COVER_KYUSHU = 'assets/covers/kyushu.png?v=5';
 const COVER_BANGKOK = 'assets/covers/bangkok.png?v=5';
-const SEED_VER = 6;
+const SEED_VER = 7;
+
+function renameTripTitles() {
+  let changed = false;
+  (APP.trips || []).forEach(t => {
+    if (!t) return;
+    if (t.id === 't1' || t.title === '九州小旅') {
+      if (t.title !== '九州之旅') { t.title = '九州之旅'; changed = true; }
+    }
+    if (t.id === 't-thai' || t.title === '曼谷小旅') {
+      if (t.title !== '曼谷之旅') { t.title = '曼谷之旅'; changed = true; }
+    }
+  });
+  return changed;
+}
 function ensureDefaultCovers() {
   let changed = false;
   (APP.trips || []).forEach(t => {
     if (!t) return;
     const blob = ((t.title || '') + ' ' + (t.destination || '')).trim();
     const cov = String(t.cover || '').trim();
-    const isKz = t.id === 't1' || t.title === '九州小旅' || /九州/.test(blob);
-    const isBk = t.id === 't-thai' || t.title === '曼谷小旅' || /曼谷|泰國|Bangkok|Thai/i.test(blob);
+    const isKz = t.id === 't1' || t.title === '九州小旅' || t.title === '九州之旅' || /九州/.test(blob);
+    const isBk = t.id === 't-thai' || t.title === '曼谷小旅' || t.title === '曼谷之旅' || /曼谷|泰國|Bangkok|Thai/i.test(blob);
     if (isKz && (!cov || /^assets\/covers\/kyushu\.png(\?v=\d+)?$/.test(cov)) && cov !== COVER_KYUSHU) {
       t.cover = COVER_KYUSHU; changed = true;
     } else if (isBk && (!cov || /^assets\/covers\/bangkok\.png(\?v=\d+)?$/.test(cov)) && cov !== COVER_BANGKOK) {
@@ -346,12 +360,13 @@ function ensureSeed() {
   /* Always migrate per-trip settings if missing */
   let always = migrateTripSettings();
   if (ensureDefaultCovers()) always = true;
+  if (renameTripTitles()) always = true;
   if ((APP.seedVersion || 1) >= SEED_VER) {
     if (always) persist();
     return always;
   }
   let changed = false;
-  const kz = APP.trips.find(t => t.id === 't1' || t.title === '九州小旅');
+  const kz = APP.trips.find(t => t.id === 't1' || t.title === '九州小旅' || t.title === '九州之旅');
   if (kz) {
     if (!Array.isArray(kz.shop)) kz.shop = [];
     if (!Array.isArray(kz.todos)) kz.todos = [];
@@ -369,6 +384,7 @@ function ensureSeed() {
   const hasThai = APP.trips.some(t => t.id === 't-thai' || /泰國|曼谷|Thai|Bangkok/i.test((t.title || '') + (t.destination || '')));
   if (!hasThai) { APP.trips.push(buildThailandTrip()); changed = true; }
   if (ensureDefaultCovers()) changed = true;
+  if (renameTripTitles()) changed = true;
   APP.seedVersion = SEED_VER;
   persist();
   return changed;
@@ -394,12 +410,12 @@ function defaultTripSettings(kind) {
 function isBangkokTrip(t) {
   if (!t) return false;
   const blob = ((t.title || '') + ' ' + (t.destination || '')).trim();
-  return t.id === 't-thai' || t.title === '曼谷小旅' || /曼谷|泰國|Bangkok|Thai/i.test(blob);
+  return t.id === 't-thai' || t.title === '曼谷小旅' || t.title === '曼谷之旅' || /曼谷|泰國|Bangkok|Thai/i.test(blob);
 }
 function isKyushuTrip(t) {
   if (!t) return false;
   const blob = ((t.title || '') + ' ' + (t.destination || '')).trim();
-  return t.id === 't1' || t.title === '九州小旅' || /九州/.test(blob);
+  return t.id === 't1' || t.title === '九州小旅' || t.title === '九州之旅' || /九州/.test(blob);
 }
 function createTrip(opts) {
   opts = opts || {};
@@ -425,7 +441,7 @@ function migrate() {
   const shop = old('kz_shop2');
   const todos = old('kz_todos');
   const t1 = createTrip({
-    id: 't1', title: '九州小旅', destination: '九州', startDate: '2026-11-22', endDate: '2026-11-28', currency: 'JPY', cover: 'assets/covers/kyushu.png?v=5',
+    id: 't1', title: '九州之旅', destination: '九州', startDate: '2026-11-22', endDate: '2026-11-28', currency: 'JPY', cover: 'assets/covers/kyushu.png?v=5',
     days: toDays(Array.isArray(oldDays) && oldDays.length ? oldDays : KZ_DEFAULT_DAYS, '2026-11-22'),
     bookings: JSON.parse(JSON.stringify(KZ_BOOKINGS)),
     budget: { total: +old('kz_budget') || 0, rate: +old('kz_rate') || 0.052, expenses: Array.isArray(exps) ? exps : [] },

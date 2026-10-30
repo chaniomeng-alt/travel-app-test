@@ -12,7 +12,7 @@
   "trips": [
     {
       "id": "t1",
-      "title": "九州小旅",
+      "title": "九州之旅",
       "destination": "九州",
       "startDate": "2026-11-22",
       "endDate": "2026-11-28",
@@ -784,7 +784,7 @@
     },
     {
       "id": "t-thai",
-      "title": "曼谷小旅",
+      "title": "曼谷之旅",
       "destination": "曼谷",
       "startDate": "2026-12-24",
       "endDate": "2026-12-27",
