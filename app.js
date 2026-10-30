@@ -2932,23 +2932,10 @@ function genTempPassword() {
   return s + '!';
 }
 
-function renderCompanionTripPick() {
-  const box = $('companionTripPick');
-  if (!box) return;
-  const cur = APP.activeTripId;
-  box.innerHTML = '<p class="hint" style="margin:0 0 6px">加入邊啲旅程：</p>' + (APP.trips || []).map(t => {
-    const checked = t.id === cur ? ' checked' : '';
-    const title = escH(t.title || t.id);
-    return `<label style="display:flex;align-items:center;gap:8px;margin:4px 0"><input type="checkbox" class="companionTripCb" value="${escH(t.id)}"${checked}> <span>${title}</span></label>`;
-  }).join('');
-}
-
 function renderCompanionUI() {
   const box = $('companionBox');
   if (!box) return;
-  const show = !!cloudUser && isOwnerAccount();
-  box.hidden = !show;
-  if (show) renderCompanionTripPick();
+  box.hidden = !(cloudUser && isOwnerAccount());
 }
 
 async function createCompanionAccount() {
@@ -2956,10 +2943,8 @@ async function createCompanionAccount() {
   if (!fbAuth || typeof firebase === 'undefined') { toast('Firebase 未就緒'); return; }
   const email = ($('companionEmail') && $('companionEmail').value || '').trim().toLowerCase();
   if (!email || !email.includes('@')) { toast('請填有效同伴電郵'); return; }
-  const cbs = Array.from(document.querySelectorAll('.companionTripCb:checked'));
-  let tripIds = cbs.map(c => c.value);
-  if (!tripIds.length) tripIds = [APP.activeTripId].filter(Boolean);
-  if (!tripIds.length) { toast('請剔選至少一個旅程'); return; }
+  const trips = (APP.trips || []).slice();
+  if (!trips.length) { toast('本機未有旅程可以分享'); return; }
   const tempPass = genTempPassword();
   const btn = $('btnCreateCompanion');
   if (btn) btn.disabled = true;
@@ -2974,26 +2959,26 @@ async function createCompanionAccount() {
     try { await secondaryAuth.signOut(); } catch (e) {}
 
     const now = Date.now();
-    for (const tid of tripIds) {
-      const t = APP.trips.find(x => x.id === tid);
-      if (!t) continue;
-      const ownerUid = t.cloudOwnerUid || cloudUser.uid;
+    const ownerUid = cloudUser.uid;
+    const addedTitles = [];
+    for (const t of trips) {
+      // Share every local trip (owner account owns the APP trips).
+      const tripOwner = t.cloudOwnerUid || ownerUid;
       let members = Array.isArray(t.memberUids) ? t.memberUids.slice() : [];
-      if (!members.includes(ownerUid)) members.unshift(ownerUid);
-      if (!members.includes(cloudUser.uid)) members.push(cloudUser.uid);
+      if (!members.includes(tripOwner)) members.unshift(tripOwner);
+      if (!members.includes(ownerUid)) members.push(ownerUid);
       if (!members.includes(newUid)) members.push(newUid);
-      t.cloudOwnerUid = ownerUid;
+      t.cloudOwnerUid = tripOwner;
       t.memberUids = [...new Set(members.filter(Boolean))];
       t.updatedAt = now;
+      addedTitles.push(t.title || t.id);
     }
     store.set(APP_KEY, APP);
     await pushLocalToCloud(false, null, true);
 
     const line = $('companionCredLine');
     const res = $('companionResult');
-    const text = '電郵：' + email + '\n臨時密碼：' + tempPass + '\n已加入：' + tripIds.map(id => {
-      const t = APP.trips.find(x => x.id === id); return t ? (t.title || id) : id;
-    }).join('、');
+    const text = '電郵：' + email + '\n臨時密碼：' + tempPass + '\n已加入全部旅程：' + addedTitles.join('、');
     if (line) line.textContent = text;
     if (res) res.hidden = false;
     window.__companionCopyText = email + '\n' + tempPass;
