@@ -262,7 +262,7 @@ function createTrip(opts) {
     id: opts.id || uid('t'), title: opts.title || '新旅程', destination: opts.destination || '',
     startDate: start, endDate: end, cover: opts.cover || '', currency: opts.currency || 'JPY',
     days: opts.days || [], bookings: opts.bookings || { flights: [], stays: [] },
-    budget: opts.budget || { total: 0, rate: 0.052, expenses: [] },
+    budget: opts.budget || { total: 0, rate: ({ JPY:0.052, THB:0.22, KRW:0.0056, TWD:0.24, USD:7.8, EUR:8.4, GBP:9.9 }[opts.currency || 'JPY'] || 0.052), expenses: [] },
     shop: opts.shop || [], todos: opts.todos || [], members: opts.members || []
   };
   if (!t.days.length) for (let d = pd(start); d <= pd(end); d.setDate(d.getDate() + 1)) t.days.push({ date: isoDate(d), title: '', items: [] });
