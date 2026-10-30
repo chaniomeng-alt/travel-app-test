@@ -418,16 +418,52 @@ function tripPartyLabel(t) {
   if (names.length) return '👥 ' + names.join('、') + (pax > 1 ? ' · ' + pax + ' 人' : '');
   return '👥 ' + pax + ' 人';
 }
+function resolveBookingGuest(x, t) {
+  if (!x) return '';
+  const tripRef = t || ((typeof trip !== 'undefined' && trip) ? trip : (typeof getTrip === 'function' ? getTrip() : null));
+  const mem = (tripRef && tripRef.members) || [];
+  if (Array.isArray(x.memberIds) && x.memberIds.length) {
+    const names = x.memberIds.map(id => {
+      const m = mem.find(mm => mm && mm.id === id);
+      return m && m.name ? String(m.name).trim() : '';
+    }).filter(Boolean);
+    if (names.length) return names.join('、');
+  }
+  const g = String(x.guest || '').trim();
+  if (g) return g;
+  if (mem.length) return mem.map(m => m && m.name).filter(Boolean).join('、');
+  return '';
+}
 function bkPeopleNote(x, style) {
   if (!x) return '';
   const p = +x.people || 0;
-  const g = String(x.guest || '').trim();
+  const g = resolveBookingGuest(x);
   if (!p && !g && !x.amount) return '';
   const bits = [];
   if (g || p) bits.push('人員' + (g ? ' ' + g : '') + (p ? (g ? ' · ' : ' ') + p + ' 人' : ''));
   if (x.amount) bits.push('金額 ' + x.amount + (p ? ' · 分攤 ' + p + ' 人' : ''));
   if (!bits.length) return '';
   return '<div class="pass-note"' + (style || '') + '>' + escH(bits.join(' · ')) + '</div>';
+}
+function syncBookingGuestsFromMembers(t) {
+  if (!t || !t.bookings || Array.isArray(t.bookings)) return false;
+  let changed = false;
+  const syncOne = (x) => {
+    if (!x) return;
+    if (!Array.isArray(x.memberIds) || !x.memberIds.length) {
+      const pax = Math.max(1, +x.people || 1);
+      const ids = (t.members || []).slice(0, Math.min(pax, (t.members || []).length)).map(m => m.id);
+      if (ids.length) { x.memberIds = ids; changed = true; }
+    }
+    const label = resolveBookingGuest(x, t);
+    if (label && x.guest !== label) { x.guest = label; changed = true; }
+    if (Array.isArray(x.memberIds) && x.memberIds.length && +x.people !== x.memberIds.length) {
+      x.people = x.memberIds.length; changed = true;
+    }
+  };
+  (t.bookings.flights || []).forEach(syncOne);
+  (t.bookings.stays || []).forEach(syncOne);
+  return changed;
 }
 
 function normDepartTime(v) {
@@ -486,12 +522,10 @@ function ensurePartyMembers() {
     });
     const b = t.bookings;
     if (!b || Array.isArray(b)) return;
-    const guest = (t.members[0] && t.members[0].name) || 'CHA';
     const pax = isBangkokTrip(t) ? 2 : (isKyushuTrip(t) ? 1 : 0);
     if (!pax) return;
     (b.flights || []).forEach(f => {
       if (f.people == null || +f.people === 0) { f.people = pax; changed = true; }
-      if (!f.guest) { f.guest = guest; changed = true; }
       if (!Array.isArray(f.memberIds)) {
         f.memberIds = (t.members || []).slice(0, Math.min(pax, (t.members || []).length)).map(m => m.id);
         if (f.memberIds.length) changed = true;
@@ -499,12 +533,12 @@ function ensurePartyMembers() {
     });
     (b.stays || []).forEach(st => {
       if (st.people == null || +st.people === 0) { st.people = pax; changed = true; }
-      if (!st.guest) { st.guest = guest; changed = true; }
       if (!Array.isArray(st.memberIds)) {
         st.memberIds = (t.members || []).slice(0, Math.min(pax, (t.members || []).length)).map(m => m.id);
         if (st.memberIds.length) changed = true;
       }
     });
+    if (syncBookingGuestsFromMembers(t)) changed = true;
   });
   return changed;
 }
@@ -1928,6 +1962,7 @@ function getTripMembers() {
 function saveMembers() {
   const t = (typeof trip !== 'undefined' && trip) ? trip : getTrip();
   t.members = getTripMembers();
+  syncBookingGuestsFromMembers(t);
   saveTrip(t);
   if (typeof renderBookings === 'function') renderBookings();
   if (typeof renderBudget === 'function') renderBudget();
