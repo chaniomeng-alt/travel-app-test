@@ -1092,8 +1092,8 @@ const trip = getTrip();
 let days = trip.days;
 if (!trip.budget) trip.budget = { total: 0, rate: 0.052, expenses: [] };
 if (!trip.bookings) trip.bookings = { flights: [], stays: [] };
-(trip.bookings.flights || []).forEach(f => { if (!f.id) f.id = uid('f'); if (f.people == null) f.people = 1; if (f.amount == null) f.amount = 0; if (!f.fileId) f.fileId = ''; if (!f.fileStoragePath) f.fileStoragePath = ''; if (!f.fileDownloadURL) f.fileDownloadURL = ''; if (!f.fileName) f.fileName = ''; if (!f.fileMime) f.fileMime = ''; if (f.fileSize == null) f.fileSize = 0; });
-(trip.bookings.stays || []).forEach(s => { if (!s.id) s.id = uid('s'); if (s.people == null) s.people = 1; if (s.amount == null) s.amount = 0; if (!s.fileId) s.fileId = ''; if (!s.fileStoragePath) s.fileStoragePath = ''; if (!s.fileDownloadURL) s.fileDownloadURL = ''; if (!s.fileName) s.fileName = ''; if (!s.fileMime) s.fileMime = ''; if (s.fileSize == null) s.fileSize = 0; if (!s.q) s.q = s.name || ''; });
+(trip.bookings.flights || []).forEach(f => { if (!f.id) f.id = uid('f'); if (f.people == null) f.people = 1; if (f.amount == null) f.amount = 0; if (!f.fileId) f.fileId = ''; if (!f.fileStoragePath) f.fileStoragePath = ''; if (!f.fileDownloadURL) f.fileDownloadURL = ''; if (!f.fileName) f.fileName = ''; if (!f.fileMime) f.fileMime = ''; if (f.fileSize == null) f.fileSize = 0; if (f.fileFsSynced == null) f.fileFsSynced = false; if (f.fileCloudAt == null) f.fileCloudAt = 0; });
+(trip.bookings.stays || []).forEach(s => { if (!s.id) s.id = uid('s'); if (s.people == null) s.people = 1; if (s.amount == null) s.amount = 0; if (!s.fileId) s.fileId = ''; if (!s.fileStoragePath) s.fileStoragePath = ''; if (!s.fileDownloadURL) s.fileDownloadURL = ''; if (!s.fileName) s.fileName = ''; if (!s.fileMime) s.fileMime = ''; if (s.fileSize == null) s.fileSize = 0; if (s.fileFsSynced == null) s.fileFsSynced = false; if (s.fileCloudAt == null) s.fileCloudAt = 0; if (!s.q) s.q = s.name || ''; });
 
 /* ---------- IndexedDB for booking files ---------- */
 const IDB_NAME = 'travel_app_files', IDB_STORE = 'files';
@@ -1139,13 +1139,203 @@ async function idbDel(key) {
   });
 }
 
-/* ---------- Firebase Storage booking attachments ---------- */
-const BK_FILE_MAX_BYTES = 8 * 1024 * 1024; /* ~8MB soft limit (Storage rules hard-cap 10MB) */
+/* ---------- Booking attachments: compress to screenshot → Firestore files subcollection ---------- */
+/* Primary path does NOT need Firebase Storage / Blaze. Storage helpers remain gated fallback only. */
+const BK_USE_STORAGE = false; /* set true only if Blaze Storage is enabled */
+const BK_FS_B64_MAX = 700 * 1024; /* max base64 chars per Firestore file doc (doc hard-cap 1MB) */
+const BK_FILE_INPUT_MAX = 25 * 1024 * 1024; /* allow large camera/PDF picks; we compress before sync */
+const BK_PDFJS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+const BK_PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+let pdfJsLoading = null;
+
 function bookingHasFile(b) {
-  return !!(b && (b.fileId || b.fileStoragePath || b.fileDownloadURL));
+  return !!(b && (b.fileId || b.fileFsSynced || b.fileStoragePath || b.fileDownloadURL));
+}
+function sanitizeTripForCloud(t) {
+  const copy = JSON.parse(JSON.stringify(t || {}));
+  const scrub = (b) => {
+    if (!b || typeof b !== 'object') return;
+    delete b.fileDataBase64;
+    delete b.fileData;
+    delete b.data;
+  };
+  ((copy.bookings && copy.bookings.flights) || []).forEach(scrub);
+  ((copy.bookings && copy.bookings.stays) || []).forEach(scrub);
+  return copy;
+}
+function bookingFileCloudLabel(b) {
+  if (!bookingHasFile(b)) return '';
+  if (b.fileFsSynced || b.fileStoragePath || b.fileDownloadURL) return '';
+  return '（待上雲）';
 }
 function bookingStoragePath(tripId, bookingId, fileId) {
   return 'trips/' + tripId + '/bookings/' + bookingId + '/' + (fileId || 'file');
+}
+function bookingFilesCol(tripId) {
+  return fbDb.collection('trips').doc(tripId).collection('files');
+}
+function blobToRawBase64(blob) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const url = String(r.result || '');
+      const i = url.indexOf(',');
+      res(i >= 0 ? url.slice(i + 1) : url);
+    };
+    r.onerror = () => rej(r.error || new Error('read fail'));
+    r.readAsDataURL(blob);
+  });
+}
+function b64ToBlob(b64, mime) {
+  const bin = atob(b64);
+  const len = bin.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: mime || 'image/jpeg' });
+}
+function canvasToJpegBlob(canvas, quality) {
+  return new Promise((res, rej) => {
+    if (!canvas.toBlob) {
+      try {
+        const url = canvas.toDataURL('image/jpeg', quality);
+        const i = url.indexOf(',');
+        res(b64ToBlob(i >= 0 ? url.slice(i + 1) : url, 'image/jpeg'));
+      } catch (e) { rej(e); }
+      return;
+    }
+    canvas.toBlob(b => (b ? res(b) : rej(new Error('toBlob fail'))), 'image/jpeg', quality);
+  });
+}
+async function loadImageElement(blob) {
+  if (typeof createImageBitmap === 'function') {
+    try { return await createImageBitmap(blob); } catch (e) { /* fall through */ }
+  }
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await new Promise((res, rej) => {
+      const el = new Image();
+      el.onload = () => res(el);
+      el.onerror = () => rej(new Error('image load fail'));
+      el.src = url;
+    });
+    return img;
+  } finally {
+    try { URL.revokeObjectURL(url); } catch (e) {}
+  }
+}
+async function compressImageToFsLimit(sourceBlob) {
+  const img = await loadImageElement(sourceBlob);
+  const ow = img.width || img.naturalWidth || 0;
+  const oh = img.height || img.naturalHeight || 0;
+  if (!ow || !oh) throw new Error('讀唔到相片');
+  const scales = [1, 0.85, 0.7, 0.55, 0.42, 0.32, 0.24];
+  const qualities = [0.82, 0.7, 0.58, 0.46, 0.36, 0.28, 0.22];
+  const maxEdge0 = 1600;
+  for (const scale of scales) {
+    let tw = Math.max(1, Math.round(ow * scale));
+    let th = Math.max(1, Math.round(oh * scale));
+    const edge = Math.max(tw, th);
+    if (edge > maxEdge0) {
+      const f = maxEdge0 / edge;
+      tw = Math.max(1, Math.round(tw * f));
+      th = Math.max(1, Math.round(th * f));
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = tw; canvas.height = th;
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) continue;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, tw, th);
+    ctx.drawImage(img, 0, 0, tw, th);
+    for (const q of qualities) {
+      const out = await canvasToJpegBlob(canvas, q);
+      const b64Est = Math.ceil(out.size * 4 / 3) + 8;
+      if (b64Est <= BK_FS_B64_MAX) {
+        if (typeof img.close === 'function') try { img.close(); } catch (e) {}
+        return out;
+      }
+    }
+  }
+  if (typeof img.close === 'function') try { img.close(); } catch (e) {}
+  return null;
+}
+function ensurePdfJs() {
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if (pdfJsLoading) return pdfJsLoading;
+  pdfJsLoading = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = BK_PDFJS_CDN;
+    s.async = true;
+    s.onload = () => {
+      try {
+        if (!window.pdfjsLib) throw new Error('pdf.js missing');
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = BK_PDFJS_WORKER;
+        res(window.pdfjsLib);
+      } catch (e) { rej(e); }
+    };
+    s.onerror = () => rej(new Error('載入 PDF 工具失敗'));
+    document.head.appendChild(s);
+  }).catch(e => { pdfJsLoading = null; throw e; });
+  return pdfJsLoading;
+}
+async function pdfFirstPageToJpegBlob(file) {
+  const pdfjsLib = await ensurePdfJs();
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  if (pdf.numPages > 1) {
+    toast('PDF 有多頁，只會用第 1 頁截圖同步（Firestore 上限）');
+  }
+  const page = await pdf.getPage(1);
+  const base = page.getViewport({ scale: 1 });
+  const targetW = Math.min(1400, base.width);
+  const scale = targetW / base.width;
+  const viewport = page.getViewport({ scale });
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.floor(viewport.width));
+  canvas.height = Math.max(1, Math.floor(viewport.height));
+  const ctx = canvas.getContext('2d', { alpha: false });
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  return canvasToJpegBlob(canvas, 0.8);
+}
+async function prepareBookingScreenshot(file) {
+  if (!file) throw new Error('未有檔案');
+  if (file.size > BK_FILE_INPUT_MAX) {
+    throw new Error('檔案太大（揀檔上限約 25MB），請用截圖或壓縮後再試');
+  }
+  const mime = String(file.type || '').toLowerCase();
+  const name = String(file.name || '');
+  const isPdf = mime.includes('pdf') || /\.pdf$/i.test(name);
+  const isImg = mime.startsWith('image/') || /\.(jpe?g|png|webp|gif|heic|bmp)$/i.test(name);
+  if (!isPdf && !isImg) {
+    throw new Error('只接受相片或 PDF（會轉成壓縮截圖）');
+  }
+  let source = file;
+  if (isPdf) {
+    try {
+      source = await pdfFirstPageToJpegBlob(file);
+    } catch (e) {
+      console.warn('[bkfile] pdf render', e);
+      throw new Error('PDF 轉截圖失敗，請改用手機截圖後再上載');
+    }
+  }
+  const compressed = await compressImageToFsLimit(source);
+  if (!compressed) {
+    throw new Error('壓縮後仍然超過上限（約 700KB），請改用較清楚但細啲嘅截圖');
+  }
+  const b64 = await blobToRawBase64(compressed);
+  if (b64.length > BK_FS_B64_MAX) {
+    throw new Error('壓縮後仍然超過上限（約 700KB），請改用較細嘅截圖');
+  }
+  const base = (name || 'booking').replace(/\.[^.]+$/, '') || 'booking';
+  return {
+    blob: compressed,
+    mime: 'image/jpeg',
+    fileName: base + '.jpg',
+    size: compressed.size,
+    b64
+  };
 }
 async function ensureTripDocForStorage(t) {
   if (!fbDb || !cloudUser || !t || !t.id) return false;
@@ -1161,52 +1351,96 @@ async function ensureTripDocForStorage(t) {
     ownerUid,
     memberUids,
     updatedAt: t.updatedAt || Date.now(),
-    trip: JSON.parse(JSON.stringify(t))
+    trip: sanitizeTripForCloud(t)
   };
   await fbDb.collection('trips').doc(t.id).set(payload);
   return true;
 }
 async function deleteBookingCloudFile(storagePath) {
-  if (!storagePath || !fbStorage || !cloudUser) return;
+  if (!BK_USE_STORAGE || !storagePath || !fbStorage || !cloudUser) return;
   try {
     await fbStorage.ref().child(storagePath).delete();
   } catch (e) {
     console.warn('[storage] delete', e);
   }
 }
+async function deleteBookingFsFile(tripId, fileId) {
+  if (!fbDb || !cloudUser || !tripId || !fileId) return;
+  try {
+    await bookingFilesCol(tripId).doc(fileId).delete();
+  } catch (e) {
+    console.warn('[fs-file] delete', e);
+  }
+}
+async function fetchBookingFsBlob(tripId, fileId) {
+  if (!fbDb || !cloudUser || !tripId || !fileId) return null;
+  const snap = await bookingFilesCol(tripId).doc(fileId).get();
+  if (!snap.exists) return null;
+  const d = snap.data() || {};
+  if (!d.data) return null;
+  return b64ToBlob(d.data, d.mime || 'image/jpeg');
+}
 async function uploadBookingCloudFile(booking, tripObj) {
   const t = tripObj || (typeof trip !== 'undefined' ? trip : null) || (typeof getTrip === 'function' ? getTrip() : null);
-  if (!booking || !booking.fileId || !fbStorage || !cloudUser || !t) return false;
+  if (!booking || !booking.fileId || !fbDb || !cloudUser || !t) return false;
   let blob = null;
   try { blob = await idbGet(booking.fileId); } catch (e) { return false; }
   if (!blob) return false;
   try {
     await ensureTripDocForStorage(t);
   } catch (e) {
-    console.warn('[storage] ensure trip', e);
+    console.warn('[fs-file] ensure trip', e);
     return false;
   }
-  const path = bookingStoragePath(t.id, booking.id, booking.fileId);
   try {
-    const ref = fbStorage.ref().child(path);
-    await ref.put(blob, { contentType: blob.type || booking.fileMime || 'application/octet-stream' });
-    let url = '';
-    try { url = await ref.getDownloadURL(); } catch (e) {}
-    if (booking.fileStoragePath && booking.fileStoragePath !== path) {
-      await deleteBookingCloudFile(booking.fileStoragePath);
+    let b64 = await blobToRawBase64(blob);
+    if (b64.length > BK_FS_B64_MAX || !String(blob.type || booking.fileMime || '').includes('jpeg')) {
+      const prepared = await prepareBookingScreenshot(new File([blob], booking.fileName || 'booking.jpg', { type: blob.type || 'image/jpeg' }));
+      blob = prepared.blob;
+      b64 = prepared.b64;
+      await idbPut(booking.fileId, blob);
+      booking.fileMime = prepared.mime;
+      booking.fileSize = prepared.size;
+      booking.fileName = prepared.fileName || booking.fileName;
     }
-    booking.fileStoragePath = path;
-    booking.fileDownloadURL = url || booking.fileDownloadURL || '';
-    if (!booking.fileMime && blob.type) booking.fileMime = blob.type;
-    if (!booking.fileSize && blob.size) booking.fileSize = blob.size;
+    if (b64.length > BK_FS_B64_MAX) {
+      console.warn('[fs-file] still too large', b64.length);
+      return false;
+    }
+    await bookingFilesCol(t.id).doc(booking.fileId).set({
+      bookingId: booking.id || '',
+      fileId: booking.fileId,
+      name: booking.fileName || 'booking.jpg',
+      mime: booking.fileMime || 'image/jpeg',
+      size: booking.fileSize || blob.size || 0,
+      data: b64,
+      updatedAt: Date.now(),
+      kind: 'screenshot'
+    });
+    booking.fileFsSynced = true;
+    booking.fileCloudAt = Date.now();
+    /* optional Storage fallback (Blaze) — off by default */
+    if (BK_USE_STORAGE && fbStorage) {
+      try {
+        const path = bookingStoragePath(t.id, booking.id, booking.fileId);
+        const ref = fbStorage.ref().child(path);
+        await ref.put(blob, { contentType: blob.type || 'image/jpeg' });
+        let url = '';
+        try { url = await ref.getDownloadURL(); } catch (e) {}
+        booking.fileStoragePath = path;
+        booking.fileDownloadURL = url || booking.fileDownloadURL || '';
+      } catch (e) {
+        console.warn('[storage] optional put', e);
+      }
+    }
     return true;
   } catch (e) {
-    console.warn('[storage] upload', e);
+    console.warn('[fs-file] upload', e);
     return false;
   }
 }
 async function flushPendingBookingUploads(silent) {
-  if (!fbStorage || !cloudUser || !APP || !APP.trips) return 0;
+  if (!fbDb || !cloudUser || !APP || !APP.trips) return 0;
   let n = 0;
   for (const t of APP.trips) {
     if (!t || !t.bookings) continue;
@@ -1214,7 +1448,7 @@ async function flushPendingBookingUploads(silent) {
     let touched = false;
     for (const list of lists) {
       for (const b of list) {
-        if (!b || !b.fileId || b.fileStoragePath) continue;
+        if (!b || !b.fileId || b.fileFsSynced) continue;
         let local = null;
         try { local = await idbGet(b.fileId); } catch (e) {}
         if (!local) continue;
@@ -1224,21 +1458,23 @@ async function flushPendingBookingUploads(silent) {
     }
     if (touched) saveTrip(t);
   }
-  if (n && !silent) toast('已上載 ' + n + ' 個預約附件到雲端');
+  if (n && !silent) toast('已上載 ' + n + ' 個預約截圖到雲端');
   return n;
 }
 async function applyLocalBookingFile(o, file) {
   if (!file) return o;
-  if (file.size > BK_FILE_MAX_BYTES) {
-    throw new Error('檔案太大（上限約 8MB）');
-  }
+  const prepared = await prepareBookingScreenshot(file);
   const fileId = o.id + '_file';
+  const t = (typeof trip !== 'undefined' ? trip : null) || (typeof getTrip === 'function' ? getTrip() : null);
+  if (o.fileId && t && t.id) await deleteBookingFsFile(t.id, o.fileId);
   if (o.fileStoragePath) await deleteBookingCloudFile(o.fileStoragePath);
-  await idbPut(fileId, file);
+  await idbPut(fileId, prepared.blob);
   o.fileId = fileId;
-  o.fileName = file.name || '';
-  o.fileMime = file.type || '';
-  o.fileSize = file.size || 0;
+  o.fileName = prepared.fileName;
+  o.fileMime = prepared.mime;
+  o.fileSize = prepared.size;
+  o.fileFsSynced = false;
+  o.fileCloudAt = 0;
   o.fileStoragePath = '';
   o.fileDownloadURL = '';
   return o;
@@ -1802,7 +2038,7 @@ function openBkModal(kind, edit) {
   $('bkFlightFields').hidden = kind !== 'flight';
   $('bkStayFields').hidden = kind !== 'stay';
   $('bkErr').textContent = '';
-  $('bkFileNote').textContent = edit && bookingHasFile(edit) ? ('已上載' + (edit.fileStoragePath ? '（已同步雲端）' : '（本機；儲存／同步後上雲）')) : '未上載';
+  $('bkFileNote').textContent = edit && bookingHasFile(edit) ? ('已上載' + ((edit.fileFsSynced || edit.fileStoragePath) ? '（已同步雲端）' : '（本機；儲存／同步後上雲）')) : '未上載';
   $('bkNote').value = edit ? (edit.note || edit.meta || '') : '';
   $('bkAmt').value = edit && edit.amount ? edit.amount : '';
   $('bkPeople').value = edit && edit.people ? edit.people : 1;
@@ -1825,15 +2061,17 @@ function openBkModal(kind, edit) {
 }
 async function handleBkFile(file) {
   if (!file) return;
-  if (file.size > BK_FILE_MAX_BYTES) {
+  $('bkFileNote').textContent = '壓縮截圖中…';
+  try {
+    const prepared = await prepareBookingScreenshot(file);
+    bkPendingFile = new File([prepared.blob], prepared.fileName, { type: prepared.mime });
+    $('bkFileNote').textContent = '已轉成壓縮截圖約 ' + Math.max(1, Math.round(prepared.size / 1024)) + 'KB（儲存後同步雲端）';
+  } catch (e) {
     bkPendingFile = null;
-    $('bkFileNote').textContent = '檔案太大（上限約 8MB）';
-    toast('附件上限約 8MB，請壓縮後再上載');
-    return;
+    const msg = (e && e.message) || '壓縮失敗，請改用截圖';
+    $('bkFileNote').textContent = msg;
+    toast(msg);
   }
-  bkPendingFile = file;
-  const kind = (file.type || '').includes('pdf') ? 'PDF' : '相片';
-  $('bkFileNote').textContent = '已選 ' + kind + '（儲存時寫入；登入後同步雲端）';
 }
 $('bkFile').onchange = e => { handleBkFile(e.target.files[0]); e.target.value = ''; };
 $('bkCam').onchange = e => { handleBkFile(e.target.files[0]); e.target.value = ''; };
@@ -1862,7 +2100,9 @@ $('bkSave').onclick = async () => {
       fileDownloadURL: bkEdit ? (bkEdit.fileDownloadURL || '') : '',
       fileName: bkEdit ? (bkEdit.fileName || '') : '',
       fileMime: bkEdit ? (bkEdit.fileMime || '') : '',
-      fileSize: bkEdit ? (bkEdit.fileSize || 0) : 0
+      fileSize: bkEdit ? (bkEdit.fileSize || 0) : 0,
+      fileFsSynced: bkEdit ? !!bkEdit.fileFsSynced : false,
+      fileCloudAt: bkEdit ? (bkEdit.fileCloudAt || 0) : 0
     };
     if (bkPendingFile) {
       try { await applyLocalBookingFile(o, bkPendingFile); }
@@ -1895,7 +2135,9 @@ $('bkSave').onclick = async () => {
       fileDownloadURL: bkEdit ? (bkEdit.fileDownloadURL || '') : '',
       fileName: bkEdit ? (bkEdit.fileName || '') : '',
       fileMime: bkEdit ? (bkEdit.fileMime || '') : '',
-      fileSize: bkEdit ? (bkEdit.fileSize || 0) : 0
+      fileSize: bkEdit ? (bkEdit.fileSize || 0) : 0,
+      fileFsSynced: bkEdit ? !!bkEdit.fileFsSynced : false,
+      fileCloudAt: bkEdit ? (bkEdit.fileCloudAt || 0) : 0
     };
     o.dates = stayDatesLabel(o);
     if (bkPendingFile) {
@@ -1911,7 +2153,7 @@ $('bkSave').onclick = async () => {
   if (wantUpload && saved && cloudUser) {
     void (async () => {
       const ok = await uploadBookingCloudFile(saved);
-      if (ok) { saveTrip(trip); renderBookings(); toast('附件已同步到雲端'); }
+      if (ok) { saveTrip(trip); renderBookings(); toast('附件截圖已同步到雲端'); }
       else toast('附件已存本機；請保持登入，稍後「立即同步」會再試上雲');
     })();
   }
@@ -1937,38 +2179,33 @@ function closeFileView() {
 async function openBkFile(entry) {
   const meta = (entry && typeof entry === 'object') ? entry : { fileId: entry || '' };
   const fileId = meta.fileId || '';
-  if (!fileId && !meta.fileStoragePath && !meta.fileDownloadURL) return alert('未有上載檔案');
+  if (!fileId && !meta.fileFsSynced && !meta.fileStoragePath && !meta.fileDownloadURL) return alert('未有上載檔案');
   let blob = null;
   if (fileId) {
     try { blob = await idbGet(fileId); } catch (e) { /* try cloud next */ }
   }
-  if (!blob && meta.fileStoragePath && fbStorage && cloudUser) {
+  if (!blob && fileId && fbDb && cloudUser && trip && trip.id) {
+    try { blob = await fetchBookingFsBlob(trip.id, fileId); }
+    catch (e) { console.warn('[fs-file] open', e); }
+  }
+  if (!blob && BK_USE_STORAGE && meta.fileStoragePath && fbStorage && cloudUser) {
     try {
       const url = await fbStorage.ref().child(meta.fileStoragePath).getDownloadURL();
       const res = await fetch(url);
       if (res.ok) blob = await res.blob();
     } catch (e) { console.warn('[storage] open path', e); }
   }
-  if (!blob && meta.fileDownloadURL) {
+  if (!blob && BK_USE_STORAGE && meta.fileDownloadURL) {
     try {
       const res = await fetch(meta.fileDownloadURL);
       if (res.ok) blob = await res.blob();
     } catch (e) { console.warn('[storage] open url', e); }
   }
-  if (!blob && fileId && fbStorage && cloudUser && trip) {
-    /* legacy: try conventional path even if metadata missing */
-    try {
-      const guess = bookingStoragePath(trip.id, String(fileId).replace(/_file$/, ''), fileId);
-      const url = await fbStorage.ref().child(guess).getDownloadURL();
-      const res = await fetch(url);
-      if (res.ok) blob = await res.blob();
-    } catch (e) {}
-  }
   if (blob && fileId) {
     try { await idbPut(fileId, blob); } catch (e) {}
   }
   if (!blob) {
-    if (!cloudUser) return alert('搵唔到上載檔案。請先登入雲端帳號，或喺原本上載嗰部機開啟後再同步。');
+    if (!cloudUser) return alert('搵唔到上載檔案。請先登入雲端帳號，再撳「立即同步」。');
     return alert('搵唔到上載檔案（雲端亦未有）。請喺原本上載嗰部機開啟 App 並「立即同步」。');
   }
   const mime = String(blob.type || meta.fileMime || '').toLowerCase();
@@ -2044,7 +2281,7 @@ function renderBookings() {
         <div class="pass-foot"><div>航班編號<b>${escH(f.flightNo)}</b></div><div style="text-align:right">日期<b>${fmtBkDate(f.date)}</b></div></div>
         ${f.note ? `<div class="pass-note">${escH(f.note)}</div>` : ''}
         ${bkPeopleNote(f)}
-        ${bookingHasFile(f) ? `<button type="button" class="file-badge" data-a="file">已上載 PDF／相片 · 撳睇${f.fileStoragePath ? '' : '（待上雲）'}</button>` : ''}
+        ${bookingHasFile(f) ? `<button type="button" class="file-badge" data-a="file">已上載截圖 · 撳睇${bookingFileCloudLabel(f)}</button>` : ''}
         <div class="bk-actions">
           <button class="ghost sm" data-a="edit">編輯</button>
           ${bookingHasFile(f) ? `<button class="ghost sm" data-a="file">睇檔案</button>` : ''}
@@ -2062,7 +2299,7 @@ function renderBookings() {
         <div class="stay-meta">${escH(s.addr || s.meta || s.note || '')}</div>
         <a class="maplink" href="${escH(gmap(s.q || s.name))}" target="_blank" rel="noopener">${ic('pin')}Google 地圖</a>
         ${bkPeopleNote(s, ' style="margin-top:8px"')}
-        ${bookingHasFile(s) ? `<button type="button" class="file-badge" data-a="file">已上載 PDF／相片 · 撳睇${s.fileStoragePath ? '' : '（待上雲）'}</button>` : ''}
+        ${bookingHasFile(s) ? `<button type="button" class="file-badge" data-a="file">已上載截圖 · 撳睇${bookingFileCloudLabel(s)}</button>` : ''}
         <div class="bk-actions">
           <button class="ghost sm" data-a="edit">編輯</button>
           ${bookingHasFile(s) ? `<button class="ghost sm" data-a="file">睇檔案</button>` : ''}
@@ -2083,6 +2320,7 @@ function renderBookings() {
         if (a === 'edit') openBkModal('stay', s);
         if (a === 'file') openBkFile(s);
         if (a === 'del') confirmAsk('刪除呢間住宿？', async () => {
+          if (s.fileId) await deleteBookingFsFile(trip.id, s.fileId);
           if (s.fileStoragePath) await deleteBookingCloudFile(s.fileStoragePath);
           if (s.fileId) await idbDel(s.fileId);
           trip.bookings.stays = trip.bookings.stays.filter(x => x.id !== id);
@@ -2093,6 +2331,7 @@ function renderBookings() {
         if (a === 'edit') openBkModal('flight', f);
         if (a === 'file') openBkFile(f);
         if (a === 'del') confirmAsk('刪除呢張機票？', async () => {
+          if (f.fileId) await deleteBookingFsFile(trip.id, f.fileId);
           if (f.fileStoragePath) await deleteBookingCloudFile(f.fileStoragePath);
           if (f.fileId) await idbDel(f.fileId);
           trip.bookings.flights = trip.bookings.flights.filter(x => x.id !== id);
@@ -3033,11 +3272,11 @@ function renderCloudAccountUI() {
   if (pullBtn) pullBtn.hidden = !allowForce;
   if (forceHint) {
     if (allowForce) {
-      forceHint.innerHTML = '正常用「立即同步」。若兩部唔齊：喺<strong>最齊嗰部</strong>撳「強制上載本機」，再喺另一部撳「強制下載雲端」。強制掣只開放畀 ' + FORCE_SYNC_EMAIL + '。預約附件登入後會上載 Firebase Storage，換機可睇。';
+      forceHint.innerHTML = '正常用「立即同步」。若兩部唔齊：喺<strong>最齊嗰部</strong>撳「強制上載本機」，再喺另一部撳「強制下載雲端」。強制掣只開放畀 ' + FORCE_SYNC_EMAIL + '。預約附件會轉成壓縮截圖同步到 Firestore，換機可睇。';
     } else if (cloudUser) {
-      forceHint.textContent = '正常用「立即同步」。強制上載／下載只開放畀管理員帳號。預約附件登入後會同步雲端。';
+      forceHint.textContent = '正常用「立即同步」。強制上載／下載只開放畀管理員帳號。預約附件會以壓縮截圖同步雲端。';
     } else {
-      forceHint.textContent = '正常用「立即同步」。登入後預約附件會同步到雲端（上限約 8MB）。';
+      forceHint.textContent = '正常用「立即同步」。登入後預約附件會轉成壓縮截圖同步雲端（每檔約 ≤700KB）。';
     }
   }
   renderCompanionUI();
@@ -3266,7 +3505,7 @@ async function pushLocalToCloud(fromMerge, prefetchedCloudMap, forceUpload) {
         ownerUid,
         memberUids,
         updatedAt: t.updatedAt || now,
-        trip: JSON.parse(JSON.stringify(t))
+        trip: sanitizeTripForCloud(t)
       };
       const ref = fbDb.collection('trips').doc(t.id);
       /* wholesale trip replace — no merge that could leave stale nested fields */

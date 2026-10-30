@@ -17,6 +17,21 @@ service cloud.firestore {
       return request.resource.data.memberUids is list
         && request.auth.uid in request.resource.data.memberUids;
     }
+    function tripReadable(tripId) {
+      return signedIn()
+        && (
+          get(/databases/$(database)/documents/trips/$(tripId)).data.ownerUid == request.auth.uid
+          || request.auth.uid in get(/databases/$(database)/documents/trips/$(tripId)).data.memberUids
+        );
+    }
+    function filePayloadOk() {
+      return request.resource.data.keys().hasAll(['fileId', 'data', 'mime', 'updatedAt'])
+        && request.resource.data.fileId is string
+        && request.resource.data.data is string
+        && request.resource.data.data.size() <= 720000
+        && request.resource.data.mime is string
+        && request.resource.data.updatedAt is number;
+    }
 
     match /users/{userId} {
       allow read, write: if signedIn() && request.auth.uid == userId;
@@ -29,6 +44,12 @@ service cloud.firestore {
         && request.resource.data.ownerUid == resource.data.ownerUid
         && membersOk();
       allow delete: if isOwner();
+
+      match /files/{fileId} {
+        allow read: if tripReadable(tripId);
+        allow create, update: if tripReadable(tripId) && filePayloadOk();
+        allow delete: if tripReadable(tripId);
+      }
     }
   }
 }
