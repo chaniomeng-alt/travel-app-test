@@ -896,7 +896,22 @@ document.getElementById('dayCard').addEventListener('click', e => { if (e.target
 /* ---------- home: 我的旅程 ---------- */
 const COVERS = ['#F4C7C3', '#BFE3D0', '#C9DDF2', '#F7DFA5', '#D9CCEF', '#F2C9A0'];
 const IN_TRIP = location.hash === '#trip';
-function enterTrip(id) { setActiveTrip(id); location.hash = 'trip'; location.reload(); }
+async function enterTrip(id) {
+  if (!setActiveTrip(id)) return;
+  /* Push activeTripId BEFORE reload so syncWithCloud cannot bounce back to an older cloud trip. */
+  try {
+    if (typeof cloudSyncTimer !== 'undefined' && cloudSyncTimer) clearTimeout(cloudSyncTimer);
+    if (typeof fbDb !== 'undefined' && fbDb && typeof cloudUser !== 'undefined' && cloudUser) {
+      await fbDb.collection('users').doc(cloudUser.uid).set({
+        email: cloudUser.email || '',
+        activeTripId: id,
+        updatedAt: Date.now()
+      }, { merge: true });
+    }
+  } catch (e) { console.warn('[cloud] activeTrip push', e); }
+  location.hash = 'trip';
+  location.reload();
+}
 document.getElementById('backHome').onclick = () => { history.replaceState(null, '', location.pathname + location.search); location.reload(); };
 function daysBetween(a, b) { return Math.round((pd(b) - pd(a)) / 864e5) + 1; }
 const escH = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -2625,6 +2640,7 @@ function renderCloudAccountUI() {
       forceHint.textContent = '正常用「立即同步」。預約附件仍只存本機。';
     }
   }
+  renderCompanionUI();
   cloudSetStatus(cloudLastStatus);
 }
 
@@ -2720,21 +2736,13 @@ async function syncWithCloud() {
     }
     APP.trips = kept;
 
-    /* Meta: activeTripId / settings from user doc if present */
+    /* Meta: NEVER overwrite local activeTripId here — that bounced Bangkok → Kyushu after enterTrip reload
+       when cloud user doc still had the older trip. Only forcePullFromCloud may adopt cloud activeTripId.
+       Settings still merge if cloud user doc has them. */
     try {
       const uref = await fbDb.collection('users').doc(uid).get();
       if (uref.exists) {
         const u = uref.data() || {};
-        if (u.activeTripId && APP.trips.some(t => t.id === u.activeTripId)) {
-          if (APP.activeTripId !== u.activeTripId) {
-            const cloudMetaAt = +u.updatedAt || 0;
-            const localMax = Math.max(0, ...(APP.trips.map(tripUpdatedAt)));
-            if (cloudMetaAt >= localMax) {
-              APP.activeTripId = u.activeTripId;
-              changed = true;
-            }
-          }
-        }
         if (u.settings && typeof u.settings === 'object' && (+u.updatedAt || 0) > 0) {
           APP.settings = Object.assign({}, APP.settings || {}, u.settings);
         }
@@ -2904,22 +2912,102 @@ async function cloudSignIn() {
     toast('登入成功');
   } catch (e) { toast(cloudAuthError(e)); }
 }
+/* Public sign-up disabled in UI. Owner creates companions via secondary Auth app (keeps owner session). */
 async function cloudSignUp() {
-  const email = ($('cloudEmail') && $('cloudEmail').value || '').trim();
-  const pass = ($('cloudPass') && $('cloudPass').value) || '';
-  if (!email || !pass) { toast('請填電郵同密碼'); return; }
-  if (pass.length < 6) { toast('密碼至少 6 個字元'); return; }
-  try {
-    await fbAuth.createUserWithEmailAndPassword(email, pass);
-    toast('註冊成功，已登入');
-  } catch (e) { toast(cloudAuthError(e)); }
+  toast('公開註冊已關閉，請用管理員產生嘅帳號登入');
 }
 async function cloudGoogle() {
+  toast('公開註冊／Google 自助開戶已關閉');
+}
+
+function isOwnerAccount() {
+  const email = ((cloudUser && cloudUser.email) || '').trim().toLowerCase();
+  return email === FORCE_SYNC_EMAIL;
+}
+
+function genTempPassword() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  let s = '';
+  for (let i = 0; i < 10; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s + '!';
+}
+
+function renderCompanionTripPick() {
+  const box = $('companionTripPick');
+  if (!box) return;
+  const cur = APP.activeTripId;
+  box.innerHTML = '<p class="hint" style="margin:0 0 6px">加入邊啲旅程：</p>' + (APP.trips || []).map(t => {
+    const checked = t.id === cur ? ' checked' : '';
+    const title = escH(t.title || t.id);
+    return `<label style="display:flex;align-items:center;gap:8px;margin:4px 0"><input type="checkbox" class="companionTripCb" value="${escH(t.id)}"${checked}> <span>${title}</span></label>`;
+  }).join('');
+}
+
+function renderCompanionUI() {
+  const box = $('companionBox');
+  if (!box) return;
+  const show = !!cloudUser && isOwnerAccount();
+  box.hidden = !show;
+  if (show) renderCompanionTripPick();
+}
+
+async function createCompanionAccount() {
+  if (!cloudUser || !isOwnerAccount()) { toast('只有管理員可以產生同伴帳號'); return; }
+  if (!fbAuth || typeof firebase === 'undefined') { toast('Firebase 未就緒'); return; }
+  const email = ($('companionEmail') && $('companionEmail').value || '').trim().toLowerCase();
+  if (!email || !email.includes('@')) { toast('請填有效同伴電郵'); return; }
+  const cbs = Array.from(document.querySelectorAll('.companionTripCb:checked'));
+  let tripIds = cbs.map(c => c.value);
+  if (!tripIds.length) tripIds = [APP.activeTripId].filter(Boolean);
+  if (!tripIds.length) { toast('請剔選至少一個旅程'); return; }
+  const tempPass = genTempPassword();
+  const btn = $('btnCreateCompanion');
+  if (btn) btn.disabled = true;
+  let secondary = null;
   try {
-    const provider = new firebase.auth.GoogleAuthProvider();
-    await fbAuth.signInWithPopup(provider);
-    toast('Google 登入成功');
-  } catch (e) { toast(cloudAuthError(e)); }
+    cloudSetStatus('產生同伴帳號中…');
+    secondary = (firebase.apps || []).find(a => a.name === 'CompanionFactory')
+      || firebase.initializeApp(FIREBASE_CONFIG, 'CompanionFactory');
+    const secondaryAuth = secondary.auth();
+    const cred = await secondaryAuth.createUserWithEmailAndPassword(email, tempPass);
+    const newUid = cred.user.uid;
+    try { await secondaryAuth.signOut(); } catch (e) {}
+
+    const now = Date.now();
+    for (const tid of tripIds) {
+      const t = APP.trips.find(x => x.id === tid);
+      if (!t) continue;
+      const ownerUid = t.cloudOwnerUid || cloudUser.uid;
+      let members = Array.isArray(t.memberUids) ? t.memberUids.slice() : [];
+      if (!members.includes(ownerUid)) members.unshift(ownerUid);
+      if (!members.includes(cloudUser.uid)) members.push(cloudUser.uid);
+      if (!members.includes(newUid)) members.push(newUid);
+      t.cloudOwnerUid = ownerUid;
+      t.memberUids = [...new Set(members.filter(Boolean))];
+      t.updatedAt = now;
+    }
+    store.set(APP_KEY, APP);
+    await pushLocalToCloud(false, null, true);
+
+    const line = $('companionCredLine');
+    const res = $('companionResult');
+    const text = '電郵：' + email + '\n臨時密碼：' + tempPass + '\n已加入：' + tripIds.map(id => {
+      const t = APP.trips.find(x => x.id === id); return t ? (t.title || id) : id;
+    }).join('、');
+    if (line) line.textContent = text;
+    if (res) res.hidden = false;
+    window.__companionCopyText = email + '\n' + tempPass;
+    toast('已產生同伴帳號，請即複製密碼');
+    cloudSetStatus('同伴帳號已建立');
+    if ($('companionEmail')) $('companionEmail').value = '';
+  } catch (e) {
+    console.warn('[cloud] createCompanion', e);
+    try { if (secondary) await secondary.auth().signOut(); } catch (e2) {}
+    toast(cloudAuthError(e));
+    cloudSetStatus('產生同伴失敗');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 async function cloudSignOut() {
   try {
@@ -2934,6 +3022,16 @@ function wireCloudUI() {
   if ($('btnCloudSignUp')) $('btnCloudSignUp').onclick = () => cloudSignUp();
   if ($('btnCloudGoogle')) $('btnCloudGoogle').onclick = () => cloudGoogle();
   if ($('btnCloudSignOut')) $('btnCloudSignOut').onclick = () => cloudSignOut();
+  if ($('btnCreateCompanion')) $('btnCreateCompanion').onclick = () => createCompanionAccount();
+  if ($('btnCopyCompanion')) $('btnCopyCompanion').onclick = async () => {
+    const t = window.__companionCopyText || (($('companionCredLine') && $('companionCredLine').textContent) || '');
+    try {
+      await navigator.clipboard.writeText(t);
+      toast('已複製');
+    } catch (e) {
+      toast('複製失敗，請長按文字手動複製');
+    }
+  };
   if ($('btnCloudSyncNow')) $('btnCloudSyncNow').onclick = () => {
     if (!cloudUser) { toast('請先登入'); return; }
     cloudSetStatus('同步中…');

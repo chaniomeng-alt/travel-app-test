@@ -314,10 +314,8 @@
         <label style="display:block;margin-top:8px">密碼<input class="fld" type="password" id="cloudPass" autocomplete="current-password" placeholder="至少 6 個字元" style="width:100%;margin-top:6px"></label>
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
           <button type="button" class="btn" id="btnCloudSignIn">登入</button>
-          <button type="button" class="btn ghost" id="btnCloudSignUp">註冊</button>
-          <button type="button" class="btn ghost" id="btnCloudGoogle">用 Google 登入</button>
         </div>
-        <p class="hint" style="margin-top:8px">註冊用電郵＋密碼。Google 登入要喺 Firebase Console 開咗 Google 供應商，同埋授權網域加咗呢個站。</p>
+        <p class="hint" style="margin-top:8px">公開註冊已關閉。帳號由管理員喺設定產生（電郵＋臨時密碼）之後先登入。</p>
       </div>
       <div id="cloudSignedIn" hidden>
         <p id="cloudUserLine" style="margin:0 0 8px;font-weight:700"></p>
@@ -329,6 +327,18 @@
           <button type="button" class="btn ghost" id="btnCloudSignOut">登出</button>
         </div>
         <p class="hint" id="cloudForceHint" style="margin-top:8px">正常用「立即同步」。預約附件仍只存本機。</p>
+        <div id="companionBox" hidden style="margin-top:16px;padding-top:12px;border-top:1px solid var(--line,#e8e0d8)">
+          <b style="display:block;margin-bottom:6px">產生同伴帳號</b>
+          <p class="hint" style="margin:0 0 8px">得管理員可見。產生電郵＋臨時密碼（只顯示一次），並將對方加入你剔選嘅旅程。</p>
+          <label>同伴電郵<input class="fld" type="email" id="companionEmail" autocomplete="off" placeholder="friend@example.com" style="width:100%;margin-top:6px"></label>
+          <div id="companionTripPick" style="margin-top:10px"></div>
+          <button type="button" class="btn" id="btnCreateCompanion" style="margin-top:10px;width:100%">產生帳號</button>
+          <div id="companionResult" hidden style="margin-top:10px;padding:10px;border-radius:10px;background:rgba(0,0,0,.04)">
+            <p style="margin:0 0 6px;font-weight:700">請即複製俾同伴（之後唔會再顯示密碼）</p>
+            <p class="hint" id="companionCredLine" style="margin:0 0 8px;word-break:break-all"></p>
+            <button type="button" class="btn ghost" id="btnCopyCompanion" style="width:100%">複製電郵同密碼</button>
+          </div>
+        </div>
       </div>
     </div>
     <div class="card">
