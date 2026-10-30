@@ -133,9 +133,39 @@ const gmap = q => 'https://www.google.com/maps/search/?api=1&query=' + encodeURI
 const mapLink = q => `<a class="map" href="${gmap(q)}" target="_blank" rel="noopener" aria-label="在 Google 地圖打開">${ic('pin')}</a>`;
 const HQ_KUM = 'ドーミーイン熊本', HQ_NAG = 'ドーミーイン PREMIUM 長崎駅前', HQ_FUK = '西鉄ホテル クルーム博多';
 const FUK_INT = '福岡空港 国際線ターミナル';
+let _toastTimer = null;
+function toast(msg, ms) {
+  let el = document.getElementById('appToast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'appToast';
+    el.className = 'app-toast';
+    el.setAttribute('role', 'status');
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), ms || 2800);
+}
+let _storageToastAt = 0;
+function storageFailToast(where) {
+  const now = Date.now();
+  if (now - _storageToastAt < 2500) return;
+  _storageToastAt = now;
+  toast('儲存失敗（' + (where || '本機') + '）：空間可能唔夠，請匯出備份後刪啲附件或資料');
+}
 const store = {
   get(k, f) { try { const v = localStorage.getItem(k); return v === null ? f : JSON.parse(v); } catch (e) { return f; } },
-  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  set(k, v) {
+    try {
+      localStorage.setItem(k, JSON.stringify(v));
+      return true;
+    } catch (e) {
+      storageFailToast('localStorage');
+      return false;
+    }
+  }
 };
 
 const KZ_DEFAULT_DAYS = [
@@ -863,13 +893,19 @@ function idbOpen() {
   });
 }
 async function idbPut(key, blob) {
-  const db = await idbOpen();
-  return new Promise((res, rej) => {
-    const tx = db.transaction(IDB_STORE, 'readwrite');
-    tx.objectStore(IDB_STORE).put(blob, key);
-    tx.oncomplete = () => res();
-    tx.onerror = () => rej(tx.error);
-  });
+  try {
+    const db = await idbOpen();
+    await new Promise((res, rej) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(blob, key);
+      tx.oncomplete = () => res();
+      tx.onerror = () => rej(tx.error || new Error('idbPut failed'));
+      tx.onabort = () => rej(tx.error || new Error('idbPut aborted'));
+    });
+  } catch (e) {
+    storageFailToast('IndexedDB');
+    throw e;
+  }
 }
 async function idbGet(key) {
   const db = await idbOpen();
@@ -1870,46 +1906,153 @@ if ($('setHint') && isInTripView()) {
 (function(){ const s=document.createElement('style'); s.textContent=`.toggle{width:48px;height:28px;border-radius:99px;border:3px solid var(--line);background:#ddd;position:relative;flex:none}.toggle::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}.toggle.on,.toggle[aria-pressed="true"]{background:var(--pri);border-color:var(--pri)}.toggle.on::after,.toggle[aria-pressed="true"]::after{left:22px}`; document.head.appendChild(s); })();
 
 
-/* ---------- backup export/import (Station 5 lite) ---------- */
-function exportBackup() {
-  const blob = new Blob([JSON.stringify(APP, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'travel-backup-' + isoDate(new Date()).replace(/-/g, '') + '.json';
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-  toast('已匯出備份');
+/* ---------- backup export/import (Station 5) ---------- */
+const LAST_EXPORT_KEY = 'travel_app_last_export';
+const BACKUP_DISMISS_KEY = 'travel_app_backup_dismiss';
+const BACKUP_DAY_MS = 86400000;
+
+function collectBookingFileIds(app) {
+  const ids = new Set();
+  (app && app.trips || []).forEach(t => {
+    const b = t.bookings;
+    if (!b) return;
+    const lists = Array.isArray(b) ? [b] : [b.flights || [], b.stays || [], b.other || []];
+    lists.forEach(list => (list || []).forEach(x => { if (x && x.fileId) ids.add(x.fileId); }));
+  });
+  return [...ids];
+}
+function blobToB64Meta(blob) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const url = String(r.result || '');
+      const i = url.indexOf(',');
+      res({ mime: blob.type || 'application/octet-stream', data: i >= 0 ? url.slice(i + 1) : url });
+    };
+    r.onerror = () => rej(r.error || new Error('read fail'));
+    r.readAsDataURL(blob);
+  });
+}
+function b64MetaToBlob(meta) {
+  const bin = atob(meta.data || '');
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: (meta && meta.mime) || 'application/octet-stream' });
+}
+function markBackupExported() {
+  try { localStorage.setItem(LAST_EXPORT_KEY, String(Date.now())); } catch (e) {}
+  try { localStorage.removeItem(BACKUP_DISMISS_KEY); } catch (e) {}
+  const b = $('backupBanner'); if (b) b.hidden = true;
+}
+function dismissBackupBanner() {
+  try { localStorage.setItem(BACKUP_DISMISS_KEY, String(Date.now())); } catch (e) {}
+  const b = $('backupBanner'); if (b) b.hidden = true;
+}
+function checkBackupReminder() {
+  const b = $('backupBanner');
+  if (!b) return;
+  let last = 0, dismissedAt = 0;
+  try { last = +localStorage.getItem(LAST_EXPORT_KEY) || 0; } catch (e) {}
+  try { dismissedAt = +localStorage.getItem(BACKUP_DISMISS_KEY) || 0; } catch (e) {}
+  if (dismissedAt && (Date.now() - dismissedAt) < 14 * BACKUP_DAY_MS) { b.hidden = true; return; }
+  const overdue = !last || (Date.now() - last > 14 * BACKUP_DAY_MS);
+  b.hidden = !overdue;
+}
+function goBackupSettings() {
+  const setBtn = document.querySelector('#nav button[data-v="v-set"]');
+  if (setBtn) setBtn.click();
+  else {
+    document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'v-set'));
+  }
+  const card = $('btnExport');
+  if (card) setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80);
+}
+async function exportBackup() {
+  try {
+    toast('匯出緊…', 5000);
+    const files = {};
+    for (const id of collectBookingFileIds(APP)) {
+      try {
+        const blob = await idbGet(id);
+        if (blob) files[id] = await blobToB64Meta(blob);
+      } catch (e) { /* skip missing attachment */ }
+    }
+    const payload = Object.assign({}, APP, { _files: files, _exportedAt: new Date().toISOString() });
+    const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'travel-backup-' + isoDate(new Date()).replace(/-/g, '') + '.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    markBackupExported();
+    toast('已匯出備份' + (Object.keys(files).length ? '（含 ' + Object.keys(files).length + ' 個附件）' : ''));
+  } catch (e) {
+    toast('匯出失敗，請稍後再試');
+  }
+}
+function stripBackupExtras(data) {
+  const copy = Object.assign({}, data);
+  delete copy._files;
+  delete copy._exportedAt;
+  return copy;
+}
+function validateBackup(data) {
+  return !!(data && data.version === 1 && Array.isArray(data.trips) && data.trips.length);
 }
 function importBackupFile(file) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = () => {
+    let data;
     try {
-      const data = JSON.parse(reader.result);
-      if (!data || data.version !== 1 || !Array.isArray(data.trips) || !data.trips.length) throw new Error('格式唔啱');
-      confirmAsk('匯入會覆蓋而家手機入面全部旅程資料，確定？', () => {
-        APP = data;
-        APP.seedVersion = Math.max(APP.seedVersion || 1, SEED_VER);
-        persist();
-        toast('已匯入，重新整理緊…');
-        setTimeout(() => location.reload(), 600);
-      });
-    } catch (e) { toast('匯入失敗：檔案格式唔啱'); }
+      data = JSON.parse(reader.result);
+    } catch (e) {
+      toast('匯入失敗：檔案格式唔啱');
+      return;
+    }
+    if (!validateBackup(data)) {
+      toast('匯入失敗：檔案格式唔啱，未改動現有資料');
+      return;
+    }
+    confirmAsk('匯入會覆蓋而家手機入面全部旅程資料，確定？', () => {
+      (async () => {
+        try {
+          const files = data._files && typeof data._files === 'object' ? data._files : {};
+          const next = stripBackupExtras(data);
+          next.seedVersion = Math.max(next.seedVersion || 1, SEED_VER);
+          APP = next;
+          if (!persist()) throw new Error('persist failed');
+          for (const id of Object.keys(files)) {
+            const meta = files[id];
+            if (!meta || !meta.data) continue;
+            await idbPut(id, b64MetaToBlob(meta));
+          }
+          toast('已匯入，重新整理緊…');
+          setTimeout(() => location.reload(), 600);
+        } catch (e) {
+          toast('匯入失敗：儲存空間唔夠或寫入錯誤');
+        }
+      })();
+    });
   };
+  reader.onerror = () => toast('匯入失敗：讀唔到檔案');
   reader.readAsText(file);
 }
-if ($('btnExport')) $('btnExport').onclick = exportBackup;
+if ($('btnExport')) $('btnExport').onclick = () => { exportBackup(); };
 if ($('btnImport')) $('btnImport').onclick = () => $('importFile') && $('importFile').click();
 if ($('importFile')) $('importFile').onchange = e => { importBackupFile(e.target.files[0]); e.target.value = ''; };
 if ($('btnLoadDemo')) $('btnLoadDemo').onclick = () => {
   confirmAsk('載入示範資料（九州＋曼谷）會覆蓋本機全部旅程，確定？', () => {
     fetch('travel-backup-20261030.json').then(r => r.json()).then(data => {
-      if (!data || data.version !== 1) throw new Error('bad');
-      APP = data; persist();
+      if (!validateBackup(data)) throw new Error('bad');
+      APP = stripBackupExtras(data); persist();
       toast('已載入示範資料');
       setTimeout(() => location.reload(), 600);
     }).catch(() => toast('載入失敗，請稍後再試'));
   });
 };
+if ($('backupBannerGo')) $('backupBannerGo').onclick = () => { goBackupSettings(); };
+if ($('backupBannerDismiss')) $('backupBannerDismiss').onclick = () => dismissBackupBanner();
+checkBackupReminder();
 
 showDay(0);

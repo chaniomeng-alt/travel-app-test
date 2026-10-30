@@ -12,6 +12,13 @@
 <script defer src="app.js"></script>
 </head>
 <body>
+<div id="backupBanner" class="backup-banner" hidden>
+  <span>已經超過 14 日冇匯出備份，建議而家備份一次，換機或清除資料先唔會冇晒。</span>
+  <div class="backup-banner-acts">
+    <button type="button" class="btn sm" id="backupBannerGo">去備份</button>
+    <button type="button" class="ghost sm" id="backupBannerDismiss" aria-label="關閉">×</button>
+  </div>
+</div>
 <div id="petals"></div>
 
 <section id="home" hidden>
@@ -244,7 +251,7 @@
         <button type="button" class="btn ghost" id="btnLoadDemo">載入示範資料</button>
       </div>
       <input type="file" id="importFile" accept="application/json,.json" hidden>
-      <p class="hint" style="margin-top:8px">示範資料包括九州之旅同曼谷之旅（Outlook 機票酒店，無預約編號）。匯入會覆蓋本機資料。</p>
+      <p class="hint" style="margin-top:8px">匯出會包埋預約附件（PDF／相片）。示範資料包括九州之旅同曼谷之旅（Outlook 機票酒店，無預約編號）。匯入會覆蓋本機資料。</p>
     </div>
     <p class="hint" id="setHint">小小貓陪你去旅行 🐾</p>
   </section>

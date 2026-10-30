@@ -427,3 +427,26 @@ body.dark nav { background:var(--card); }
 .wx-badge.live { background: color-mix(in srgb, var(--pri) 18%, #fff); color: var(--pri-d); border-color: color-mix(in srgb, var(--pri) 40%, #fff); }
 .wgrid .card.wx-ref { border-style: dashed; }
 .w-note.ref { color:#8A6A2A; font-weight:700; font-size:.75rem; }
+
+
+/* Station 5 — backup reminder + toast */
+.backup-banner {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: 10px 14px; margin: 0; background: #F7EBC6; color: var(--ink);
+  border-bottom: 3px solid #F0DFA6; font-size: .85rem; font-weight: 600; line-height: 1.4;
+}
+.backup-banner[hidden] { display: none !important; }
+.backup-banner-acts { display: flex; gap: 6px; margin-left: auto; align-items: center; }
+.btn.sm, .ghost.sm { padding: 6px 12px; font-size: .78rem; border-radius: 14px; box-shadow: 0 2px 0 var(--pri-d); }
+.ghost.sm { box-shadow: 0 2px 0 #E1DAC2; min-width: 36px; justify-content: center; }
+.app-toast {
+  position: fixed; left: 50%; bottom: calc(88px + env(safe-area-inset-bottom));
+  transform: translateX(-50%) translateY(12px); z-index: 80;
+  max-width: min(92vw, 420px); padding: 10px 16px; border-radius: 16px;
+  background: #3A2F26; color: #FFFBF0; font-weight: 700; font-size: .88rem;
+  box-shadow: 0 6px 20px rgba(0,0,0,.25); opacity: 0; pointer-events: none;
+  transition: opacity .2s, transform .2s; text-align: center;
+}
+.app-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+body.dark .backup-banner { background: #4A3A30; border-color: #5A4636; color: var(--ink); }
