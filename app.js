@@ -1187,11 +1187,58 @@ function blobToRawBase64(blob) {
   });
 }
 function b64ToBlob(b64, mime) {
-  const bin = atob(b64);
+  let s = String(b64 || '').replace(/\s+/g, '');
+  const comma = s.indexOf(',');
+  if (s.startsWith('data:') && comma >= 0) s = s.slice(comma + 1);
+  const bin = atob(s);
   const len = bin.length;
   const bytes = new Uint8Array(len);
   for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
   return new Blob([bytes], { type: mime || 'image/jpeg' });
+}
+function sniffBkMime(buf) {
+  if (!buf || buf.length < 4) return '';
+  const b0 = buf[0], b1 = buf[1], b2 = buf[2], b3 = buf[3];
+  if (b0 === 0xFF && b1 === 0xD8 && b2 === 0xFF) return 'image/jpeg';
+  if (b0 === 0x89 && b1 === 0x50 && b2 === 0x4E && b3 === 0x47) return 'image/png';
+  if (b0 === 0x47 && b1 === 0x49 && b2 === 0x46) return 'image/gif';
+  if (b0 === 0x52 && b1 === 0x49 && b2 === 0x46 && b3 === 0x46) return 'image/webp';
+  if (b0 === 0x25 && b1 === 0x50 && b2 === 0x44 && b3 === 0x46) return 'application/pdf';
+  return '';
+}
+async function normalizeBkBlob(blob, meta) {
+  if (!blob) return null;
+  let raw = blob;
+  if (!(raw instanceof Blob)) raw = new Blob([raw], { type: (meta && meta.fileMime) || 'application/octet-stream' });
+  let mime = String((raw.type || (meta && meta.fileMime) || '')).toLowerCase().trim();
+  const name = String((meta && meta.fileName) || '').toLowerCase();
+  if (!mime || mime === 'application/octet-stream' || mime === 'binary/octet-stream') {
+    try {
+      const ab = await raw.slice(0, 16).arrayBuffer();
+      const sniffed = sniffBkMime(new Uint8Array(ab));
+      if (sniffed) mime = sniffed;
+    } catch (e) {}
+  }
+  if (!mime || mime === 'application/octet-stream') {
+    if (/\.pdf$/i.test(name)) mime = 'application/pdf';
+    else if (/\.(png)$/i.test(name)) mime = 'image/png';
+    else if (/\.(gif)$/i.test(name)) mime = 'image/gif';
+    else if (/\.(webp)$/i.test(name)) mime = 'image/webp';
+    else if (/\.(jpe?g)$/i.test(name) || (meta && meta.fileFsSynced) || (meta && String(meta.fileMime || '').includes('image'))) mime = 'image/jpeg';
+    else mime = 'image/jpeg'; /* v6-18+ booking attachments are compressed screenshots */
+  }
+  if (raw.type !== mime) {
+    try { raw = new Blob([await raw.arrayBuffer()], { type: mime }); } catch (e) { raw = new Blob([raw], { type: mime }); }
+  }
+  return { blob: raw, mime };
+}
+function blobToDataURL(blob) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result || ''));
+    r.onerror = () => rej(r.error || new Error('read fail'));
+    r.readAsDataURL(blob);
+  });
 }
 function canvasToJpegBlob(canvas, quality) {
   return new Promise((res, rej) => {
@@ -2201,16 +2248,24 @@ async function openBkFile(entry) {
       if (res.ok) blob = await res.blob();
     } catch (e) { console.warn('[storage] open url', e); }
   }
-  if (blob && fileId) {
-    try { await idbPut(fileId, blob); } catch (e) {}
-  }
   if (!blob) {
     if (!cloudUser) return alert('搵唔到上載檔案。請先登入雲端帳號，再撳「立即同步」。');
     return alert('搵唔到上載檔案（雲端亦未有）。請喺原本上載嗰部機開啟 App 並「立即同步」。');
   }
-  const mime = String(blob.type || meta.fileMime || '').toLowerCase();
-  const url = URL.createObjectURL(blob);
+  let mime = 'image/jpeg';
+  try {
+    const norm = await normalizeBkBlob(blob, meta);
+    blob = norm.blob;
+    mime = norm.mime;
+  } catch (e) {
+    console.warn('[bkfile] normalize', e);
+    mime = String(blob.type || meta.fileMime || 'image/jpeg').toLowerCase();
+  }
+  if (fileId) {
+    try { await idbPut(fileId, blob); } catch (e) {}
+  }
   if (bkFileObjectUrl) { try { URL.revokeObjectURL(bkFileObjectUrl); } catch (e) {} }
+  const url = URL.createObjectURL(blob);
   bkFileObjectUrl = url;
   const body = $('fileViewBody');
   const title = $('fileViewTitle');
@@ -2221,12 +2276,32 @@ async function openBkFile(entry) {
     return;
   }
   body.innerHTML = '';
-  const isImg = mime.startsWith('image/');
+  const isImg = mime.startsWith('image/') || /\.(jpe?g|png|gif|webp)$/i.test(meta.fileName || '');
   const isPdf = mime.includes('pdf');
   if (title) title.textContent = isImg ? '睇相片' : (isPdf ? '睇 PDF' : '睇檔案');
   if (isImg) {
     const img = document.createElement('img');
-    img.src = url; img.alt = '預約附件';
+    img.alt = '預約附件';
+    img.decoding = 'async';
+    img.style.maxWidth = '100%';
+    img.style.maxHeight = '58vh';
+    img.onerror = async () => {
+      try {
+        const dataUrl = await blobToDataURL(blob);
+        if (img.src !== dataUrl) img.src = dataUrl;
+        else {
+          body.innerHTML = '<p class="hint" style="margin:16px">相片載入失敗，請試下載或重新上載截圖。</p>';
+        }
+      } catch (e) {
+        body.innerHTML = '<p class="hint" style="margin:16px">相片載入失敗，請試下載或重新上載截圖。</p>';
+      }
+    };
+    /* Prefer data URL for in-app preview: survives SW/blob quirks on iOS PWA */
+    try {
+      img.src = await blobToDataURL(blob);
+    } catch (e) {
+      img.src = url;
+    }
     body.appendChild(img);
   } else if (isPdf) {
     const iframe = document.createElement('iframe');
