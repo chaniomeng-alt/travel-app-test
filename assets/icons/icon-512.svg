@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="我的旅程">
+  <rect width="512" height="512" rx="112" fill="#F7F3EA"/>
+  <rect x="16" y="16" width="480" height="480" rx="100" fill="none" stroke="#E89F9F" stroke-width="20"/>
+  <!-- plane -->
+  <g transform="translate(320 72)" fill="#E89F9F">
+    <ellipse cx="56" cy="40" rx="54" ry="16"/>
+    <polygon points="56,8 110,40 56,48"/>
+    <polygon points="40,32 8,0 48,36"/>
+    <polygon points="40,48 0,80 48,44"/>
+  </g>
+  <!-- dog head -->
+  <g transform="translate(96 150)">
+    <ellipse cx="160" cy="180" rx="130" ry="120" fill="#F5E6D3" stroke="#5A4636" stroke-width="8"/>
+    <ellipse cx="50" cy="80" rx="42" ry="55" fill="#E8C9A0" stroke="#5A4636" stroke-width="8" transform="rotate(-20 50 80)"/>
+    <ellipse cx="270" cy="80" rx="42" ry="55" fill="#E8C9A0" stroke="#5A4636" stroke-width="8" transform="rotate(20 270 80)"/>
+    <circle cx="115" cy="170" r="14" fill="#5A4636"/>
+    <circle cx="205" cy="170" r="14" fill="#5A4636"/>
+    <ellipse cx="160" cy="210" rx="22" ry="16" fill="#5A4636"/>
+    <path d="M140 230 Q160 250 180 230" fill="none" stroke="#5A4636" stroke-width="8" stroke-linecap="round"/>
+  </g>
+</svg>
