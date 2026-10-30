@@ -280,7 +280,7 @@ const TH_DEFAULT_SHOP = [
 function buildThailandTrip() {
   return createTrip({
     id: 't-thai', title: '曼谷之旅', destination: '曼谷', startDate: '2026-12-24', endDate: '2026-12-27',
-    currency: 'THB', cover: 'assets/covers/bangkok.png?v=7',
+    currency: 'THB', cover: 'assets/covers/bangkok.png?v=8',
     bookings: JSON.parse(JSON.stringify(TH_BOOKINGS)),
     budget: { total: 0, rate: 0.22, expenses: [] },
     shop: TH_DEFAULT_SHOP.map(x => Object.assign({}, x)),
@@ -289,7 +289,7 @@ function buildThailandTrip() {
   });
 }
 const COVER_KYUSHU = 'assets/covers/kyushu.png?v=5';
-const COVER_BANGKOK = 'assets/covers/bangkok.png?v=7';
+const COVER_BANGKOK = 'assets/covers/bangkok.png?v=8';
 const SEED_VER = 8;
 
 function renameTripTitles() {
