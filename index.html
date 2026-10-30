@@ -45,6 +45,8 @@
   <label>旅程名稱<input class="fld" id="tmName" maxlength="30" placeholder="例如 曼谷五日遊"></label>
   <label>目的地<input class="fld" id="tmDest" maxlength="30" placeholder="例如 泰國曼谷"></label>
   <div class="tm-row"><label>開始日期<input class="fld" type="date" id="tmStart"></label><label>結束日期<input class="fld" type="date" id="tmEnd"></label></div>
+  <label>出發時間<input class="fld" type="time" id="tmDepart" value="08:00"></label>
+  <p class="hint" style="margin:4px 0 8px">倒數同進度條會用「開始日期 + 出發時間」。留空＝當日 00:00。</p>
   <div class="tm-days" id="tmDays">共 1 日</div>
   <label>貨幣<select class="fld" id="tmCur"><option>JPY</option><option>THB</option><option>KRW</option><option>TWD</option><option>USD</option><option>EUR</option><option>GBP</option></select></label>
   <div class="tm-lab">封面</div>
@@ -133,8 +135,8 @@
   <section class="view active" id="v-trip">
     <div class="card count">
       <div class="count-top">
-        <div class="count-label" id="cdLabel">距離出發</div>
-        <div class="count-time" id="cd">-- <span class="u">天</span>00<span class="c"> : </span>00<span class="c"> : </span>00</div>
+        <div class="count-label" id="cdLabel">距離出發還有</div>
+        <div class="count-time" id="cd">-- <span class="u">天</span>-- <span class="u">小時</span>-- <span class="u">分</span></div>
         <div class="track"><div class="bar" id="bar"></div><div class="plane" id="plane">✈️</div></div>
       </div>
       <div class="count-foot" id="cdFoot"></div>

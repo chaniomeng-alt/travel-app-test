@@ -48,7 +48,7 @@ h1.page { font-size: 1.7rem; font-weight: 700; }
 .count-top { padding: 18px 20px 20px; }
 .count-label { font-size: .9rem; color: var(--soft); }
 .count-time { font-family: 'Nunito', sans-serif; font-weight: 800; font-size: 2.5rem; color: var(--pri); line-height: 1.2; letter-spacing: 1px; }
-.count-time .u { font-size: 1.15rem; font-weight: 700; color: var(--ink); margin: 0 6px 0 3px; letter-spacing: 0; }
+.count-time .u { font-size: 1rem; font-weight: 700; color: var(--ink); margin: 0 8px 0 2px; letter-spacing: 0; }
 .count-time .c { font-weight: 700; opacity: .6; }
 .track { height: 12px; background: #E8E3CF; border-radius: 99px; margin-top: 14px; position: relative; }
 .bar { height: 100%; width: 0; background: var(--pri); border-radius: 99px; transition: width .6s ease; }
@@ -58,6 +58,7 @@ h1.page { font-size: 1.7rem; font-weight: 700; }
 .count-foot i { font-style: normal; font-weight: 700; font-size: .92rem; color: var(--soft); margin-right: 4px; }
 .count-foot .ft-lab { align-self: center; background: var(--pri); color: #fff; font-weight: 700; font-size: .78rem; padding: 3px 11px; border-radius: 99px; margin-right: 10px; letter-spacing: 1px; box-shadow: 0 2px 0 var(--pri-d); }
 .count-foot .ft-dow { align-self: center; font-weight: 700; font-size: .8rem; color: var(--pri); border: 2px solid var(--pri); padding: 0 9px; border-radius: 99px; margin-left: 6px; }
+.count-foot .ft-time { align-self: center; font-family: Nunito, sans-serif; font-weight: 800; font-size: 1.05rem; color: var(--pri); margin: 0 4px 0 8px; }
 
 /* day chips */
 .chips { display: flex; gap: 5px; overflow-x: auto; padding: 4px 4px 14px; margin: 0 -4px 6px; scrollbar-width: none; }

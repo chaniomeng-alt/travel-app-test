@@ -310,7 +310,7 @@ const TH_DEFAULT_SHOP = [
 ];
 function buildThailandTrip() {
   return createTrip({
-    id: 't-thai', title: '曼谷之旅', destination: '曼谷', startDate: '2026-12-24', endDate: '2026-12-27',
+    id: 't-thai', title: '曼谷之旅', destination: '曼谷', startDate: '2026-12-24', endDate: '2026-12-27', departTime: '10:20',
     currency: 'THB', cover: 'assets/covers/bangkok.png?v=8',
     bookings: JSON.parse(JSON.stringify(TH_BOOKINGS)),
     budget: { total: 0, rate: 0.22, expenses: [] },
@@ -332,7 +332,7 @@ const DEFAULT_AVATARS = [
   { src: 'assets/stickers/sticker-dog-01.png', label: '柴犬' }
 ];
 const DEFAULT_MEMBERS_CHA = [{ id: 'm-cha', name: 'CHA', role: '旅客', avatar: 'assets/stickers/pets/sticker-dog-white-tan.png' }];
-const SEED_VER = 10;
+const SEED_VER = 11;
 
 function renameTripTitles() {
   let changed = false;
@@ -429,6 +429,38 @@ function bkPeopleNote(x, style) {
   if (!bits.length) return '';
   return '<div class="pass-note"' + (style || '') + '>' + escH(bits.join(' · ')) + '</div>';
 }
+
+function normDepartTime(v) {
+  if (v == null || v === '') return '';
+  const s = String(v).trim();
+  const m = s.match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return '';
+  return String(Math.min(23, +m[1])).padStart(2, '0') + ':' + String(Math.min(59, +m[2])).padStart(2, '0');
+}
+function tripDepartMs(t) {
+  const date = (t && t.startDate) || '';
+  const tm = normDepartTime(t && t.departTime); // empty → midnight
+  const hhmm = tm || '00:00';
+  return new Date(date + 'T' + hhmm + ':00').getTime();
+}
+function ensureDepartTimes() {
+  let changed = false;
+  (APP.trips || []).forEach(t => {
+    if (!t) return;
+    if (t.departTime == null) {
+      // migrate old trips: default morning 08:00 (empty still means midnight if user clears)
+      if (isKyushuTrip(t)) t.departTime = '12:55';
+      else if (isBangkokTrip(t)) t.departTime = '10:20';
+      else t.departTime = '08:00';
+      changed = true;
+    } else {
+      const n = normDepartTime(t.departTime);
+      if (n !== t.departTime && t.departTime !== '') { t.departTime = n; changed = true; }
+    }
+  });
+  return changed;
+}
+
 function ensurePartyMembers() {
   let changed = false;
   (APP.trips || []).forEach(t => {
@@ -482,6 +514,7 @@ function ensureSeed() {
   if (ensureDefaultCovers()) always = true;
   if (renameTripTitles()) always = true;
   if (ensurePartyMembers()) always = true;
+  if (ensureDepartTimes()) always = true;
   if ((APP.seedVersion || 1) >= SEED_VER) {
     if (always) persist();
     return always;
@@ -507,6 +540,7 @@ function ensureSeed() {
   if (ensureDefaultCovers()) changed = true;
   if (renameTripTitles()) changed = true;
   if (ensurePartyMembers()) changed = true;
+  if (ensureDepartTimes()) changed = true;
   APP.seedVersion = SEED_VER;
   persist();
   return changed;
@@ -545,7 +579,8 @@ function createTrip(opts) {
   const kindHint = opts.settings ? null : (opts._kind || (isBangkokTrip(opts) ? 'bangkok' : (isKyushuTrip(opts) ? 'kyushu' : 'new')));
   const t = {
     id: opts.id || uid('t'), title: opts.title || '新旅程', destination: opts.destination || '',
-    startDate: start, endDate: end, cover: opts.cover || '', currency: opts.currency || 'JPY',
+    startDate: start, endDate: end, departTime: opts.departTime != null ? opts.departTime : '08:00',
+    cover: opts.cover || '', currency: opts.currency || 'JPY',
     days: opts.days || [], bookings: opts.bookings || { flights: [], stays: [] },
     budget: opts.budget || { total: 0, rate: ({ JPY:0.052, THB:0.22, KRW:0.0056, TWD:0.24, USD:7.8, EUR:8.4, GBP:9.9 }[opts.currency || 'JPY'] || 0.052), expenses: [] },
     shop: opts.shop || [], todos: opts.todos || [], members: opts.members || [],
@@ -563,7 +598,7 @@ function migrate() {
   const shop = old('kz_shop2');
   const todos = old('kz_todos');
   const t1 = createTrip({
-    id: 't1', title: '九州之旅', destination: '九州', startDate: '2026-11-22', endDate: '2026-11-28', currency: 'JPY', cover: 'assets/covers/kyushu.png?v=5',
+    id: 't1', title: '九州之旅', destination: '九州', startDate: '2026-11-22', endDate: '2026-11-28', departTime: '12:55', currency: 'JPY', cover: 'assets/covers/kyushu.png?v=5',
     days: toDays(Array.isArray(oldDays) && oldDays.length ? oldDays : KZ_DEFAULT_DAYS, '2026-11-22'),
     bookings: JSON.parse(JSON.stringify(KZ_BOOKINGS)),
     budget: { total: +old('kz_budget') || 0, rate: +old('kz_rate') || 0.052, expenses: Array.isArray(exps) ? exps : [] },
@@ -842,7 +877,11 @@ function renderHome() {
   APP.trips.forEach(t => {
     const st = tripStatus(t), n = daysBetween(t.startDate, t.endDate);
     let extra = '';
-    if (st === 'planning') extra = `<span class="trip-badge">✈️ 仲有 ${daysBetween(today, t.startDate) - 1} 日出發</span>`;
+    if (st === 'planning') {
+      const left = tripDepartMs(t) - Date.now();
+      const dLeft = Math.max(0, Math.ceil(left / 864e5));
+      extra = `<span class="trip-badge">✈️ 仲有 ${dLeft} 日出發</span>`;
+    }
     else if (st === 'ongoing') { const k = daysBetween(t.startDate, today); extra = `<span class="trip-badge">旅程進行中・Day ${k}/${n}</span><div class="track"><div class="bar" style="width:${k / n * 100}%"></div></div>`; }
     else extra = '<span class="trip-badge">已完成</span>';
     const c = document.createElement('div');
@@ -897,6 +936,7 @@ function openTripModal(t) {
   const td = isoDate(new Date());
   $id('tmName').value = t ? t.title : ''; $id('tmDest').value = t ? t.destination : '';
   $id('tmStart').value = t ? t.startDate : td; $id('tmEnd').value = t ? t.endDate : td;
+  $id('tmDepart').value = t ? (t.departTime != null ? t.departTime : '08:00') : '08:00';
   $id('tmCur').value = t ? (t.currency || 'JPY') : 'JPY';
   tmCover = t ? (t.cover || COVERS[0]) : COVERS[APP.trips.length % COVERS.length];
   $id('tmErr').textContent = ''; $id('tmImgNote').textContent = '會自動縮細';
@@ -924,7 +964,8 @@ $id('tmSave').onclick = () => {
   if (!title) return $id('tmErr').textContent = '請輸入旅程名稱';
   if (!a || !b || b < a) return $id('tmErr').textContent = '結束日期唔可以早過開始日期';
   if (daysBetween(a, b) > 60) return $id('tmErr').textContent = '旅程最多 60 日';
-  const o = { title, destination: $id('tmDest').value.trim(), startDate: a, endDate: b, currency: $id('tmCur').value, cover: tmCover };
+  const depRaw = ($id('tmDepart') && $id('tmDepart').value) || '';
+  const o = { title, destination: $id('tmDest').value.trim(), startDate: a, endDate: b, departTime: normDepartTime(depRaw), currency: $id('tmCur').value, cover: tmCover };
   if (tmEditing) {
     const t = tmEditing, byDate = {};
     (t.days || []).forEach(d => byDate[d.date] = d);
@@ -1217,27 +1258,33 @@ $('delDayBtn').onclick = () => {
   });
 };
 
-/* ---------- countdown ---------- */
-const target = new Date(trip.startDate + 'T00:00:00').getTime();
+/* ---------- countdown (startDate + departTime) ---------- */
+function refreshDepartTarget() {
+  return tripDepartMs(trip);
+}
+let target = refreshDepartTarget();
 const tripEnd = new Date(trip.endDate + 'T23:59:59').getTime();
-(function () {
+function renderCdFoot() {
   const d = pd(trip.startDate);
-  $('cdFoot').innerHTML = `<span class="ft-lab">出發日</span><b>${d.getFullYear()}</b><i>年</i><b>${d.getMonth() + 1}</b><i>月</i><b>${d.getDate()}</b><i>日</i><span class="ft-dow">週${'日一二三四五六'[d.getDay()]}</span>`;
+  const tm = normDepartTime(trip.departTime);
+  const timeBit = tm ? `<span class="ft-time">${tm}</span>` : '';
+  $('cdFoot').innerHTML = `<span class="ft-lab">出發</span><b>${d.getFullYear()}</b><i>年</i><b>${d.getMonth() + 1}</b><i>月</i><b>${d.getDate()}</b><i>日</i>${timeBit}<span class="ft-dow">週${'日一二三四五六'[d.getDay()]}</span>`;
   document.title = `${trip.title}｜${trip.startDate.slice(5).replace('-', '/')}–${trip.endDate.slice(5).replace('-', '/')}`;
-})();
+}
+renderCdFoot();
 function tick() {
+  target = refreshDepartTarget();
   const now = Date.now(), diff = target - now;
   const cd = $('cd'), bar = $('bar'), plane = $('plane'), lab = $('cdLabel');
   if (diff <= 0) {
     if (now > tripEnd) { lab.textContent = trip.title; cd.textContent = '旅程已完成 🎉'; bar.style.width = '100%'; plane.style.left = '100%'; return; }
-    const total = tripEnd - target, pct = Math.min(100, (now - target) / total * 100);
+    const total = Math.max(1, tripEnd - target), pct = Math.min(100, (now - target) / total * 100);
     lab.textContent = '旅程進行中'; cd.innerHTML = `Day ${Math.floor((now - target) / 864e5) + 1}<span class="u">/ ${days.length} 日</span>`;
     bar.style.width = pct + '%'; plane.style.left = pct + '%'; return;
   }
-  lab.textContent = '距離出發';
-  const dd = Math.floor(diff / 864e5), h = Math.floor(diff % 864e5 / 36e5), m = Math.floor(diff % 36e5 / 6e4), s = Math.floor(diff % 6e4 / 1e3);
-  const p2 = n => String(n).padStart(2, '0');
-  cd.innerHTML = `${dd}<span class="u">天</span>${p2(h)}<span class="c"> : </span>${p2(m)}<span class="c"> : </span>${p2(s)}`;
+  lab.textContent = '距離出發還有';
+  const dd = Math.floor(diff / 864e5), h = Math.floor(diff % 864e5 / 36e5), m = Math.floor(diff % 36e5 / 6e4);
+  cd.innerHTML = `${dd}<span class="u">天</span>${h}<span class="u">小時</span>${m}<span class="u">分</span>`;
   const win = 30 * 864e5;
   const pct = Math.min(95, Math.max(3, (now - (target - win)) / win * 100));
   bar.style.width = pct + '%'; plane.style.left = pct + '%';
