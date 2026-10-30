@@ -1096,6 +1096,7 @@ if (!trip.bookings) trip.bookings = { flights: [], stays: [] };
 (trip.bookings.stays || []).forEach(s => { if (!s.id) s.id = uid('s'); if (s.people == null) s.people = 1; if (s.amount == null) s.amount = 0; if (!s.fileId) s.fileId = ''; if (!s.fileStoragePath) s.fileStoragePath = ''; if (!s.fileDownloadURL) s.fileDownloadURL = ''; if (!s.fileName) s.fileName = ''; if (!s.fileMime) s.fileMime = ''; if (s.fileSize == null) s.fileSize = 0; if (s.fileFsSynced == null) s.fileFsSynced = false; if (s.fileCloudAt == null) s.fileCloudAt = 0; if (!s.q) s.q = s.name || ''; });
 
 /* ---------- IndexedDB for booking files ---------- */
+/* Store ArrayBuffer envelopes (not raw Blob): iOS PWA/SW updates can detach Blob handles → empty/unloadable. */
 const IDB_NAME = 'travel_app_files', IDB_STORE = 'files';
 function idbOpen() {
   return new Promise((res, rej) => {
@@ -1105,12 +1106,35 @@ function idbOpen() {
     r.onerror = () => rej(r.error);
   });
 }
-async function idbPut(key, blob) {
+async function blobToIdbRecord(blob, mimeHint) {
+  const mime = String((blob && blob.type) || mimeHint || 'application/octet-stream');
+  const ab = await blob.arrayBuffer();
+  return { v: 1, mime, ab, size: ab.byteLength, savedAt: Date.now() };
+}
+function idbRecordToBlob(rec) {
+  if (!rec) return null;
+  if (typeof Blob !== 'undefined' && rec instanceof Blob) return rec;
+  if (rec instanceof ArrayBuffer) return new Blob([rec], { type: 'application/octet-stream' });
+  if (ArrayBuffer.isView(rec)) return new Blob([rec.buffer], { type: 'application/octet-stream' });
+  if (typeof rec === 'object') {
+    if (rec.ab instanceof ArrayBuffer) return new Blob([rec.ab], { type: rec.mime || 'application/octet-stream' });
+    if (ArrayBuffer.isView(rec.ab)) return new Blob([rec.ab.buffer], { type: rec.mime || 'application/octet-stream' });
+    if (rec.data && typeof rec.data === 'string') return b64ToBlob(rec.data, rec.mime || 'image/jpeg');
+  }
+  if (typeof rec === 'string') {
+    try { return b64ToBlob(rec, 'image/jpeg'); } catch (e) { return null; }
+  }
+  return null;
+}
+async function idbPut(key, blob, mimeHint) {
   try {
     const db = await idbOpen();
+    const record = (blob && typeof blob === 'object' && blob.v === 1 && blob.ab)
+      ? blob
+      : await blobToIdbRecord(blob, mimeHint);
     await new Promise((res, rej) => {
       const tx = db.transaction(IDB_STORE, 'readwrite');
-      tx.objectStore(IDB_STORE).put(blob, key);
+      tx.objectStore(IDB_STORE).put(record, key);
       tx.oncomplete = () => res();
       tx.onerror = () => rej(tx.error || new Error('idbPut failed'));
       tx.onabort = () => rej(tx.error || new Error('idbPut aborted'));
@@ -1120,13 +1144,23 @@ async function idbPut(key, blob) {
     throw e;
   }
 }
-async function idbGet(key) {
+async function idbGetRaw(key) {
   const db = await idbOpen();
   return new Promise((res, rej) => {
     const rq = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(key);
     rq.onsuccess = () => res(rq.result || null);
     rq.onerror = () => rej(rq.error);
   });
+}
+async function idbGet(key) {
+  const raw = await idbGetRaw(key);
+  const blob = idbRecordToBlob(raw);
+  if (!blob || !blob.size) return null;
+  /* Migrate legacy Blob → envelope so later SW updates do not detach bytes */
+  if (raw instanceof Blob && blob.size > 32) {
+    try { await idbPut(key, blob, blob.type || 'application/octet-stream'); } catch (e) { /* keep readable blob */ }
+  }
+  return blob;
 }
 async function idbDel(key) {
   if (!key) return;
@@ -1137,6 +1171,25 @@ async function idbDel(key) {
     tx.oncomplete = () => res();
     tx.onerror = () => rej(tx.error);
   });
+}
+async function blobHasImageMagic(blob) {
+  if (!blob || !blob.size) return false;
+  try {
+    const ab = await blob.slice(0, 16).arrayBuffer();
+    const mime = sniffBkMime(new Uint8Array(ab));
+    return !!(mime && mime.startsWith('image/'));
+  } catch (e) { return false; }
+}
+async function canDecodeBkImage(blob) {
+  if (!blob || !blob.size) return false;
+  if (!(await blobHasImageMagic(blob))) return false;
+  try {
+    const img = await loadImageElement(blob);
+    const w = img.width || img.naturalWidth || 0;
+    const h = img.height || img.naturalHeight || 0;
+    if (typeof img.close === 'function') try { img.close(); } catch (e) {}
+    return w > 0 && h > 0;
+  } catch (e) { return false; }
 }
 
 /* ---------- Booking attachments: compress to screenshot → Firestore files subcollection ---------- */
@@ -1296,6 +1349,9 @@ async function compressImageToFsLimit(sourceBlob) {
     ctx.drawImage(img, 0, 0, tw, th);
     for (const q of qualities) {
       const out = await canvasToJpegBlob(canvas, q);
+      if (!out || out.size < 32) continue;
+      const head = new Uint8Array(await out.slice(0, 3).arrayBuffer());
+      if (!(head[0] === 0xFF && head[1] === 0xD8 && head[2] === 0xFF)) continue;
       const b64Est = Math.ceil(out.size * 4 / 3) + 8;
       if (b64Est <= BK_FS_B64_MAX) {
         if (typeof img.close === 'function') try { img.close(); } catch (e) {}
@@ -1367,9 +1423,24 @@ async function prepareBookingScreenshot(file) {
       throw new Error('PDF 轉截圖失敗，請改用手機截圖後再上載');
     }
   }
-  const compressed = await compressImageToFsLimit(source);
-  if (!compressed) {
-    throw new Error('壓縮後仍然超過上限（約 700KB），請改用較清楚但細啲嘅截圖');
+  let compressed = null;
+  /* Already a small JPEG screenshot (e.g. re-save path) — skip redraw to avoid quality loss */
+  if (!isPdf) {
+    const srcMime = String(source.type || mime || '').toLowerCase();
+    const srcB64Est = Math.ceil((source.size || 0) * 4 / 3) + 8;
+    if (srcMime.includes('jpeg') || srcMime.includes('jpg') || /\.jpe?g$/i.test(name)) {
+      if (srcB64Est <= BK_FS_B64_MAX && source.size >= 32 && await blobHasImageMagic(source)) {
+        compressed = source instanceof Blob ? source : new Blob([source], { type: 'image/jpeg' });
+        if (compressed.type !== 'image/jpeg') compressed = new Blob([await compressed.arrayBuffer()], { type: 'image/jpeg' });
+      }
+    }
+  }
+  if (!compressed) compressed = await compressImageToFsLimit(source);
+  if (!compressed || compressed.size < 32) {
+    throw new Error('壓縮失敗，請改用較清楚嘅截圖再試');
+  }
+  if (!(await blobHasImageMagic(compressed))) {
+    throw new Error('壓縮後檔案損毀，請改用截圖（JPG/PNG）再上載');
   }
   const b64 = await blobToRawBase64(compressed);
   if (b64.length > BK_FS_B64_MAX) {
@@ -1424,8 +1495,14 @@ async function fetchBookingFsBlob(tripId, fileId) {
   const snap = await bookingFilesCol(tripId).doc(fileId).get();
   if (!snap.exists) return null;
   const d = snap.data() || {};
-  if (!d.data) return null;
-  return b64ToBlob(d.data, d.mime || 'image/jpeg');
+  if (!d.data || typeof d.data !== 'string') return null;
+  let blob = b64ToBlob(d.data, d.mime || 'image/jpeg');
+  try {
+    const norm = await normalizeBkBlob(blob, { fileMime: d.mime || 'image/jpeg', fileName: d.name || '', fileFsSynced: true });
+    blob = norm.blob;
+  } catch (e) {}
+  if (!blob || !blob.size) return null;
+  return blob;
 }
 async function uploadBookingCloudFile(booking, tripObj) {
   const t = tripObj || (typeof trip !== 'undefined' ? trip : null) || (typeof getTrip === 'function' ? getTrip() : null);
@@ -1440,18 +1517,27 @@ async function uploadBookingCloudFile(booking, tripObj) {
     return false;
   }
   try {
+    let mimeNow = String(blob.type || booking.fileMime || '').toLowerCase();
     let b64 = await blobToRawBase64(blob);
-    if (b64.length > BK_FS_B64_MAX || !String(blob.type || booking.fileMime || '').includes('jpeg')) {
+    const needReencode = b64.length > BK_FS_B64_MAX
+      || !(mimeNow.includes('jpeg') || mimeNow.includes('jpg'))
+      || !(await blobHasImageMagic(blob));
+    if (needReencode) {
       const prepared = await prepareBookingScreenshot(new File([blob], booking.fileName || 'booking.jpg', { type: blob.type || 'image/jpeg' }));
       blob = prepared.blob;
       b64 = prepared.b64;
-      await idbPut(booking.fileId, blob);
+      await idbPut(booking.fileId, blob, prepared.mime);
       booking.fileMime = prepared.mime;
       booking.fileSize = prepared.size;
       booking.fileName = prepared.fileName || booking.fileName;
+      mimeNow = prepared.mime;
     }
-    if (b64.length > BK_FS_B64_MAX) {
+    if (b64.length > BK_FS_B64_MAX || b64.length > 720000) {
       console.warn('[fs-file] still too large', b64.length);
+      return false;
+    }
+    if (!(await blobHasImageMagic(blob))) {
+      console.warn('[fs-file] invalid image bytes');
       return false;
     }
     await bookingFilesCol(t.id).doc(booking.fileId).set({
@@ -1515,7 +1601,7 @@ async function applyLocalBookingFile(o, file) {
   const t = (typeof trip !== 'undefined' ? trip : null) || (typeof getTrip === 'function' ? getTrip() : null);
   if (o.fileId && t && t.id) await deleteBookingFsFile(t.id, o.fileId);
   if (o.fileStoragePath) await deleteBookingCloudFile(o.fileStoragePath);
-  await idbPut(fileId, prepared.blob);
+  await idbPut(fileId, prepared.blob, prepared.mime);
   o.fileId = fileId;
   o.fileName = prepared.fileName;
   o.fileMime = prepared.mime;
@@ -2227,31 +2313,70 @@ async function openBkFile(entry) {
   const meta = (entry && typeof entry === 'object') ? entry : { fileId: entry || '' };
   const fileId = meta.fileId || '';
   if (!fileId && !meta.fileFsSynced && !meta.fileStoragePath && !meta.fileDownloadURL) return alert('未有上載檔案');
-  let blob = null;
-  if (fileId) {
-    try { blob = await idbGet(fileId); } catch (e) { /* try cloud next */ }
-  }
-  if (!blob && fileId && fbDb && cloudUser && trip && trip.id) {
-    try { blob = await fetchBookingFsBlob(trip.id, fileId); }
-    catch (e) { console.warn('[fs-file] open', e); }
-  }
-  if (!blob && BK_USE_STORAGE && meta.fileStoragePath && fbStorage && cloudUser) {
+
+  async function tryLocal() {
+    if (!fileId) return null;
     try {
-      const url = await fbStorage.ref().child(meta.fileStoragePath).getDownloadURL();
-      const res = await fetch(url);
-      if (res.ok) blob = await res.blob();
+      const b = await idbGet(fileId);
+      if (!b || !b.size) return null;
+      return b;
+    } catch (e) { return null; }
+  }
+  async function tryCloud() {
+    if (!fileId || !fbDb || !cloudUser || !trip || !trip.id) return null;
+    try {
+      const b = await fetchBookingFsBlob(trip.id, fileId);
+      if (!b || !b.size) return null;
+      return b;
+    } catch (e) {
+      console.warn('[fs-file] open', e);
+      return null;
+    }
+  }
+  async function tryStorage() {
+    if (!BK_USE_STORAGE || !fbStorage || !cloudUser) return null;
+    try {
+      if (meta.fileStoragePath) {
+        const url = await fbStorage.ref().child(meta.fileStoragePath).getDownloadURL();
+        const res = await fetch(url);
+        if (res.ok) return await res.blob();
+      }
     } catch (e) { console.warn('[storage] open path', e); }
-  }
-  if (!blob && BK_USE_STORAGE && meta.fileDownloadURL) {
     try {
-      const res = await fetch(meta.fileDownloadURL);
-      if (res.ok) blob = await res.blob();
+      if (meta.fileDownloadURL) {
+        const res = await fetch(meta.fileDownloadURL);
+        if (res.ok) return await res.blob();
+      }
     } catch (e) { console.warn('[storage] open url', e); }
+    return null;
+  }
+
+  let blob = await tryLocal();
+  let fromCloud = false;
+  /* Prefer a decodable image; stale/detached IDB blobs after app update often fail here */
+  if (blob) {
+    const okImg = await canDecodeBkImage(blob);
+    const okPdf = !okImg && (await (async () => {
+      try {
+        const ab = await blob.slice(0, 5).arrayBuffer();
+        return sniffBkMime(new Uint8Array(ab)) === 'application/pdf';
+      } catch (e) { return false; }
+    })());
+    if (!okImg && !okPdf) {
+      console.warn('[bkfile] local blob not decodable, trying cloud');
+      blob = null;
+    }
   }
   if (!blob) {
-    if (!cloudUser) return alert('搵唔到上載檔案。請先登入雲端帳號，再撳「立即同步」。');
-    return alert('搵唔到上載檔案（雲端亦未有）。請喺原本上載嗰部機開啟 App 並「立即同步」。');
+    blob = await tryCloud();
+    fromCloud = !!blob;
   }
+  if (!blob) blob = await tryStorage();
+  if (!blob) {
+    if (!cloudUser) return alert('搵唔到上載檔案。請先登入雲端帳號，再撳「立即同步」。');
+    return alert('搵唔到可用附件（本機損毀或雲端未同步）。請喺原本上載嗰部機開啟 App 並「立即同步」，或重新上載截圖。');
+  }
+
   let mime = 'image/jpeg';
   try {
     const norm = await normalizeBkBlob(blob, meta);
@@ -2261,9 +2386,17 @@ async function openBkFile(entry) {
     console.warn('[bkfile] normalize', e);
     mime = String(blob.type || meta.fileMime || 'image/jpeg').toLowerCase();
   }
+
   if (fileId) {
-    try { await idbPut(fileId, blob); } catch (e) {}
+    try { await idbPut(fileId, blob, mime); } catch (e) {}
+    if (fromCloud && meta && typeof meta === 'object') {
+      meta.fileFsSynced = true;
+      meta.fileMime = mime;
+      meta.fileSize = blob.size;
+      try { saveTrip(trip); } catch (e) {}
+    }
   }
+
   if (bkFileObjectUrl) { try { URL.revokeObjectURL(bkFileObjectUrl); } catch (e) {} }
   const url = URL.createObjectURL(blob);
   bkFileObjectUrl = url;
@@ -2279,26 +2412,46 @@ async function openBkFile(entry) {
   const isImg = mime.startsWith('image/') || /\.(jpe?g|png|gif|webp)$/i.test(meta.fileName || '');
   const isPdf = mime.includes('pdf');
   if (title) title.textContent = isImg ? '睇相片' : (isPdf ? '睇 PDF' : '睇檔案');
+
+  const showFail = (extra) => {
+    body.innerHTML = '<p class="hint" style="margin:16px">相片載入失敗' + (extra ? '（' + extra + '）' : '') + '。請試「下載」，或重新上載截圖後再同步。</p>';
+  };
+
   if (isImg) {
     const img = document.createElement('img');
     img.alt = '預約附件';
     img.decoding = 'async';
     img.style.maxWidth = '100%';
     img.style.maxHeight = '58vh';
+    let triedBlobUrl = false;
+    let triedCloudRepair = false;
     img.onerror = async () => {
-      try {
-        const dataUrl = await blobToDataURL(blob);
-        if (img.src !== dataUrl) img.src = dataUrl;
-        else {
-          body.innerHTML = '<p class="hint" style="margin:16px">相片載入失敗，請試下載或重新上載截圖。</p>';
-        }
-      } catch (e) {
-        body.innerHTML = '<p class="hint" style="margin:16px">相片載入失敗，請試下載或重新上載截圖。</p>';
+      if (!triedBlobUrl) {
+        triedBlobUrl = true;
+        img.src = url;
+        return;
       }
+      if (!triedCloudRepair && fileId && cloudUser) {
+        triedCloudRepair = true;
+        try {
+          const cloudBlob = await tryCloud();
+          if (cloudBlob && await canDecodeBkImage(cloudBlob)) {
+            blob = cloudBlob;
+            if (fileId) try { await idbPut(fileId, cloudBlob, 'image/jpeg'); } catch (e) {}
+            if (bkFileObjectUrl) { try { URL.revokeObjectURL(bkFileObjectUrl); } catch (e) {} }
+            const u2 = URL.createObjectURL(cloudBlob);
+            bkFileObjectUrl = u2;
+            const dl = $('fileViewDl'); if (dl) dl.href = u2;
+            try { img.src = await blobToDataURL(cloudBlob); } catch (e) { img.src = u2; }
+            return;
+          }
+        } catch (e) { console.warn('[bkfile] cloud repair', e); }
+      }
+      showFail('解碼失敗');
     };
-    /* Prefer data URL for in-app preview: survives SW/blob quirks on iOS PWA */
     try {
-      img.src = await blobToDataURL(blob);
+      if (await canDecodeBkImage(blob)) img.src = await blobToDataURL(blob);
+      else img.src = url;
     } catch (e) {
       img.src = url;
     }
@@ -2322,11 +2475,12 @@ async function openBkFile(entry) {
     else if (mime.includes('webp')) ext = '.webp';
     else if (mime.includes('gif')) ext = '.gif';
     else if (isImg) ext = '.jpg';
-    const base = (meta.fileName || 'booking-file').replace(/\.[^.]+$/, '');
+    const base = (meta.fileName || 'booking-file').replace(/\\.[^.]+$/, '');
     dl.download = base + ext;
   }
   $('fileViewModal').hidden = false;
 }
+
 if ($('fileViewClose')) $('fileViewClose').onclick = () => closeFileView();
 if ($('fileViewModal')) $('fileViewModal').addEventListener('click', e => { if (e.target === $('fileViewModal')) closeFileView(); });
 if ($('fileViewOpen')) $('fileViewOpen').onclick = () => {
