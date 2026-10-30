@@ -617,9 +617,11 @@ var cloudReady = false;
 var cloudSyncTimer = null;
 var cloudSyncing = false;
 var cloudLastStatus = '未登入';
-function persist() {
+function persist(opts) {
+  opts = opts || {};
   try {
-    if (!cloudApplyingRemote && APP && Array.isArray(APP.trips)) {
+    /* only stamp on real edits — never on boot / remote apply (avoids fake "newer" local wiping cloud) */
+    if (!opts.noStamp && !cloudApplyingRemote && APP && Array.isArray(APP.trips)) {
       const now = Date.now();
       const t = APP.trips.find(x => x.id === APP.activeTripId) || APP.trips[0];
       if (t) t.updatedAt = now;
@@ -639,7 +641,7 @@ function loadApp() {
   }
   return migrate();
 }
-APP = loadApp(); persist();
+APP = loadApp(); persist({ noStamp: true });
 ensureSeed();
 /* ?seed=1 → 載入示範備份（覆蓋本機資料） */
 (function(){
@@ -2551,7 +2553,7 @@ function initFirebase() {
       if (user) {
         cloudSetStatus('登入成功，合併雲端中…');
         try {
-          await mergeCloudOnLogin();
+          await syncWithCloud();
           cloudSetStatus('已同步 ' + new Date().toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
         } catch (e) {
           console.warn('[cloud] merge', e);
@@ -2588,10 +2590,28 @@ function tripUpdatedAt(t) {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-function stampTripsNow() {
-  const now = Date.now();
-  (APP.trips || []).forEach(t => { t.updatedAt = now; });
-  return now;
+/** Rough content weight — used as tie-break so we never silently drop richer local data */
+function tripRichness(t) {
+  if (!t || typeof t !== 'object') return 0;
+  let n = 0;
+  (t.days || []).forEach(d => {
+    n += 8;
+    (d && d.items || []).forEach(() => { n += 3; });
+  });
+  n += (t.shop || []).length * 2;
+  n += (t.todos || []).length * 2;
+  n += (t.members || []).length;
+  const ex = (t.budget && t.budget.expenses) || [];
+  n += ex.length * 3;
+  const fl = (t.bookings && t.bookings.flights) || [];
+  const st = (t.bookings && t.bookings.stays) || [];
+  n += fl.length * 5 + st.length * 5;
+  return n;
+}
+
+function cloudDocUpdatedAt(cdata) {
+  if (!cdata) return 0;
+  return +cdata.updatedAt || tripUpdatedAt(cdata.trip) || 0;
 }
 
 function scheduleCloudSync() {
@@ -2613,7 +2633,20 @@ async function fetchMyCloudTrips(uid) {
   return map;
 }
 
-async function mergeCloudOnLogin() {
+function adoptRemoteTrip(remoteTrip, remoteAt, cloudMeta) {
+  const copy = Object.assign({}, remoteTrip, { updatedAt: remoteAt || tripUpdatedAt(remoteTrip) || Date.now() });
+  if (cloudMeta) {
+    if (cloudMeta.ownerUid) copy.cloudOwnerUid = cloudMeta.ownerUid;
+    if (Array.isArray(cloudMeta.memberUids)) copy.memberUids = cloudMeta.memberUids.slice();
+  }
+  return copy;
+}
+
+/**
+ * Full sync: pull cloud → merge by updatedAt (richer wins on ties / protect richer local) → upload only local-newer.
+ * Used on login and 「立即同步」.
+ */
+async function syncWithCloud() {
   if (!fbDb || !cloudUser) return;
   const uid = cloudUser.uid;
   const cloudMap = await fetchMyCloudTrips(uid);
@@ -2622,36 +2655,50 @@ async function mergeCloudOnLogin() {
   try {
     const localById = new Map((APP.trips || []).map(t => [t.id, t]));
 
-    // Pull cloud trips that are newer or missing locally
     cloudMap.forEach((cdata, id) => {
       const remoteTrip = cdata && cdata.trip;
       if (!remoteTrip || !remoteTrip.id) return;
-      const remoteAt = +cdata.updatedAt || tripUpdatedAt(remoteTrip) || 0;
+      const remoteAt = cloudDocUpdatedAt(cdata);
       const local = localById.get(id);
       if (!local) {
-        APP.trips.push(Object.assign({}, remoteTrip, { updatedAt: remoteAt || Date.now() }));
-        localById.set(id, remoteTrip);
+        const adopted = adoptRemoteTrip(remoteTrip, remoteAt, cdata);
+        APP.trips.push(adopted);
+        localById.set(id, adopted);
         changed = true;
         return;
       }
       const localAt = tripUpdatedAt(local);
+      const lr = tripRichness(local);
+      const rr = tripRichness(remoteTrip);
+      let takeRemote = false;
       if (remoteAt > localAt) {
+        /* cloud newer — still keep clearly richer local (guards against earlier stamp bugs) */
+        if (lr > rr * 1.25 && (lr - rr) >= 5) {
+          local.updatedAt = Math.max(localAt, remoteAt) + 1;
+          changed = true;
+        } else {
+          takeRemote = true;
+        }
+      } else if (remoteAt === localAt && rr > lr) {
+        takeRemote = true;
+      }
+      if (takeRemote) {
         const i = APP.trips.findIndex(t => t.id === id);
         if (i >= 0) {
-          APP.trips[i] = Object.assign({}, remoteTrip, { updatedAt: remoteAt });
+          APP.trips[i] = adoptRemoteTrip(remoteTrip, remoteAt, cdata);
+          localById.set(id, APP.trips[i]);
           changed = true;
         }
       }
     });
 
-    // Meta: activeTripId / settings from user doc if present and newer
+    /* Meta: activeTripId / settings from user doc if present */
     try {
       const uref = await fbDb.collection('users').doc(uid).get();
       if (uref.exists) {
         const u = uref.data() || {};
         if (u.activeTripId && APP.trips.some(t => t.id === u.activeTripId)) {
           if (APP.activeTripId !== u.activeTripId) {
-            // only adopt if cloud meta newer than local stamp
             const cloudMetaAt = +u.updatedAt || 0;
             const localMax = Math.max(0, ...(APP.trips.map(tripUpdatedAt)));
             if (cloudMetaAt >= localMax) {
@@ -2673,18 +2720,15 @@ async function mergeCloudOnLogin() {
 
     store.set(APP_KEY, APP);
 
-    // Upload any local trips missing or newer than cloud
-    await pushLocalToCloud(true);
+    await pushLocalToCloud(true, cloudMap);
   } finally {
     cloudApplyingRemote = false;
   }
 
   if (changed) {
     toast('已同雲端合併旅程');
-    // Soft refresh lists if home visible
     try {
       if (typeof renderHome === 'function') renderHome();
-      else if (location.hash !== '#trip') { /* stay */ }
     } catch (e) {}
   }
 }
@@ -2698,16 +2742,18 @@ async function cloudDeleteTrip(id) {
   }
 }
 
-async function pushLocalToCloud(fromMerge) {
+async function pushLocalToCloud(fromMerge, prefetchedCloudMap) {
   if (!fbDb || !cloudUser || cloudSyncing) return;
   cloudSyncing = true;
   if (!fromMerge) cloudSetStatus('上載中…');
   try {
     const uid = cloudUser.uid;
     const now = Date.now();
+    const cloudMap = prefetchedCloudMap || await fetchMyCloudTrips(uid);
     const batchLimit = 400;
     let batch = fbDb.batch();
     let n = 0;
+    let uploaded = 0;
     const commitBatch = async () => {
       if (n === 0) return;
       await batch.commit();
@@ -2721,10 +2767,22 @@ async function pushLocalToCloud(fromMerge) {
       let memberUids = Array.isArray(t.memberUids) ? t.memberUids.slice() : [];
       if (!memberUids.includes(ownerUid)) memberUids.unshift(ownerUid);
       if (ownerUid === uid && !memberUids.includes(uid)) memberUids.push(uid);
-      // Ensure owner always in members for rules simplicity
       memberUids = [...new Set(memberUids.filter(Boolean))];
       t.cloudOwnerUid = ownerUid;
       t.memberUids = memberUids;
+
+      const existing = cloudMap.get(t.id);
+      const cloudAt = cloudDocUpdatedAt(existing);
+      const localAt = tripUpdatedAt(t);
+      if (existing && cloudAt > localAt) {
+        /* cloud strictly newer — do not overwrite */
+        continue;
+      }
+      if (existing && cloudAt === localAt) {
+        const rr = tripRichness(existing.trip);
+        const lr = tripRichness(t);
+        if (rr > lr) continue;
+      }
 
       const payload = {
         ownerUid,
@@ -2735,6 +2793,7 @@ async function pushLocalToCloud(fromMerge) {
       const ref = fbDb.collection('trips').doc(t.id);
       batch.set(ref, payload, { merge: true });
       n++;
+      uploaded++;
       if (n >= batchLimit) await commitBatch();
     }
 
@@ -2750,8 +2809,9 @@ async function pushLocalToCloud(fromMerge) {
     await commitBatch();
 
     store.set(APP_KEY, APP);
-    cloudSetStatus('已同步 ' + new Date().toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-    if (!fromMerge) toast('已同步到雲端');
+    cloudSetStatus('已同步 ' + new Date().toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      + (uploaded ? `（上載 ${uploaded} 程）` : '（已同雲端一致）'));
+    if (!fromMerge) toast(uploaded ? '已同步到雲端' : '已同雲端一致');
   } catch (e) {
     console.warn('[cloud] push fail', e);
     const msg = (e && e.code === 'permission-denied')
@@ -2806,9 +2866,15 @@ function wireCloudUI() {
   if ($('btnCloudSignOut')) $('btnCloudSignOut').onclick = () => cloudSignOut();
   if ($('btnCloudSyncNow')) $('btnCloudSyncNow').onclick = () => {
     if (!cloudUser) { toast('請先登入'); return; }
-    stampTripsNow();
-    store.set(APP_KEY, APP);
-    pushLocalToCloud().catch(() => {});
+    cloudSetStatus('同步中…');
+    syncWithCloud()
+      .then(() => {
+        cloudSetStatus('已同步 ' + new Date().toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      })
+      .catch(e => {
+        console.warn('[cloud] sync now', e);
+        cloudSetStatus('同步失敗：' + ((e && e.message) || '請稍後再試'));
+      });
   };
   renderCloudAccountUI();
 }
