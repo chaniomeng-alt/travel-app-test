@@ -531,6 +531,12 @@ const STICKERS = {
   dog10: { name: '黑狗', src: 'assets/stickers/sticker-dog-10.png' },
   dog11: { name: '啡狗', src: 'assets/stickers/sticker-dog-11.png' },
   dog12: { name: '大麥町', src: 'assets/stickers/sticker-dog-12.png' },
+  /* Marshall pet dogs + 柴丸 */
+  petWt: { name: '白啡狗', src: 'assets/stickers/pets/sticker-dog-white-tan.png' },
+  petWt2: { name: '白啡狗站', src: 'assets/stickers/pets/sticker-dog-white-tan-pose2.png' },
+  petChoco: { name: '朱古力狗', src: 'assets/stickers/pets/sticker-dog-chocolate.png' },
+  petChoco2: { name: '朱古力狗趴', src: 'assets/stickers/pets/sticker-dog-chocolate-pose2.png' },
+  petChaimaru: { name: '柴丸', src: 'assets/stickers/pets/sticker-dog-chaimaru.png' },
   /* legacy canvas keys kept so old placements still render */
   maneki: { name: '招財貓' }, sakura: { name: '櫻花貓' }, ramen: { name: '拉麵貓' }, bowl: { name: '碗貓' },
   shop: { name: '購物貓' }, bags: { name: '手袋貓' }, girl: { name: '女仔' }

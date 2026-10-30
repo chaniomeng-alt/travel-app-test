@@ -34,8 +34,8 @@ jobs:
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          mkdir -p assets/covers assets/stickers assets/shop
-          git add assets/covers assets/stickers assets/shop
+          mkdir -p assets/covers assets/stickers assets/stickers/pets assets/shop
+          git add assets/covers assets/stickers assets/stickers/pets assets/shop
           if git diff --staged --quiet; then
             echo "No PNG changes"
             exit 0
