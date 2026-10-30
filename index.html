@@ -324,11 +324,11 @@
         <p class="hint" id="cloudSyncLine" style="margin:0 0 10px">同步狀態：—</p>
         <div style="display:flex;flex-wrap:wrap;gap:8px">
           <button type="button" class="btn" id="btnCloudSyncNow">立即同步</button>
-          <button type="button" class="btn ghost" id="btnCloudForcePush">強制上載本機</button>
-          <button type="button" class="btn ghost" id="btnCloudForcePull">強制下載雲端</button>
+          <button type="button" class="btn ghost" id="btnCloudForcePush" hidden>強制上載本機</button>
+          <button type="button" class="btn ghost" id="btnCloudForcePull" hidden>強制下載雲端</button>
           <button type="button" class="btn ghost" id="btnCloudSignOut">登出</button>
         </div>
-        <p class="hint" style="margin-top:8px">正常用「立即同步」。若兩部唔齊：喺<strong>最齊嗰部</strong>撳「強制上載本機」，再喺另一部撳「強制下載雲端」。兩邊必須同一個電郵（而家旅程喺 chaniomeng33@outlook.com）。預約附件仍只存本機。</p>
+        <p class="hint" id="cloudForceHint" style="margin-top:8px">正常用「立即同步」。預約附件仍只存本機。</p>
       </div>
     </div>
     <div class="card">

@@ -2593,6 +2593,12 @@ function initFirebase() {
   }
 }
 
+const FORCE_SYNC_EMAIL = 'chaniomeng33@outlook.com';
+function canForceCloudSync() {
+  const email = ((cloudUser && cloudUser.email) || '').trim().toLowerCase();
+  return email === FORCE_SYNC_EMAIL;
+}
+
 function renderCloudAccountUI() {
   const out = $('cloudSignedOut'), inn = $('cloudSignedIn'), line = $('cloudUserLine');
   if (!out || !inn) return;
@@ -2603,6 +2609,21 @@ function renderCloudAccountUI() {
   } else {
     out.hidden = false;
     inn.hidden = true;
+  }
+  const allowForce = !!cloudUser && canForceCloudSync();
+  const pushBtn = $('btnCloudForcePush');
+  const pullBtn = $('btnCloudForcePull');
+  const forceHint = $('cloudForceHint');
+  if (pushBtn) pushBtn.hidden = !allowForce;
+  if (pullBtn) pullBtn.hidden = !allowForce;
+  if (forceHint) {
+    if (allowForce) {
+      forceHint.innerHTML = '正常用「立即同步」。若兩部唔齊：喺<strong>最齊嗰部</strong>撳「強制上載本機」，再喺另一部撳「強制下載雲端」。強制掣只開放畀 ' + FORCE_SYNC_EMAIL + '。預約附件仍只存本機。';
+    } else if (cloudUser) {
+      forceHint.textContent = '正常用「立即同步」。強制上載／下載只開放畀管理員帳號。預約附件仍只存本機。';
+    } else {
+      forceHint.textContent = '正常用「立即同步」。預約附件仍只存本機。';
+    }
   }
   cloudSetStatus(cloudLastStatus);
 }
@@ -2927,6 +2948,7 @@ function wireCloudUI() {
   };
   if ($('btnCloudForcePush')) $('btnCloudForcePush').onclick = () => {
     if (!cloudUser) { toast('請先登入'); return; }
+    if (!canForceCloudSync()) { toast('強制上載只開放畀管理員帳號'); return; }
     confirmAsk('用呢部手機嘅旅程強制蓋過雲端？另一部之後請「強制下載雲端」。', () => {
       cloudSetStatus('強制上載中…');
       pushLocalToCloud(false, null, true)
@@ -2936,6 +2958,7 @@ function wireCloudUI() {
   };
   if ($('btnCloudForcePull')) $('btnCloudForcePull').onclick = () => {
     if (!cloudUser) { toast('請先登入'); return; }
+    if (!canForceCloudSync()) { toast('強制下載只開放畀管理員帳號'); return; }
     confirmAsk('用雲端覆蓋呢部手機嘅旅程？本機較新嘅改動會冇。', () => {
       forcePullFromCloud().catch(e => {
         console.warn('[cloud] force pull', e);
