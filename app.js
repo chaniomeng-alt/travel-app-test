@@ -1504,9 +1504,9 @@ function renderMembers() {
   let hint = $('memHint');
   if (hint) {
     if (isBangkokTrip(t) && mem.length < 2) {
-      hint.textContent = '曼谷預約係 2 人；Outlook 未見第二位姓名，可喺呢度自行加「旅伴」。雲端同步係第 8b 站（未做）。';
+      hint.textContent = '曼谷預約係 2 人；Outlook 未見第二位姓名，可喺呢度自行加「旅伴」。';
     } else {
-      hint.textContent = '頭像可以上載或者揀預設貓／狗。雲端同步係第 8b 站（未做）。';
+      hint.textContent = '頭像可以上載或者揀預設貓／狗。';
     }
   }
 }
