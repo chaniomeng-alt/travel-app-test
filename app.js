@@ -2166,6 +2166,7 @@ function guestLabelFromIds(ids) {
   return ids.map(id => { const m = mem.find(x => x.id === id); return m ? m.name : ''; }).filter(Boolean).join('、');
 }
 function openBkModal(kind, edit) {
+  if (!canEditBookings()) { toast('只有管理員可以新增／編輯預約'); return; }
   bkKind = kind; bkEdit = edit; bkPendingFile = null;
   $('bkTitle').textContent = edit ? (kind === 'flight' ? '編輯機票' : '編輯住宿') : (kind === 'flight' ? '新增機票' : '新增住宿');
   $('bkFlightFields').hidden = kind !== 'flight';
@@ -2194,6 +2195,7 @@ function openBkModal(kind, edit) {
 }
 async function handleBkFile(file) {
   if (!file) return;
+  if (!canEditBookings()) { toast('只有管理員可以上載／更換附件'); return; }
   $('bkFileNote').textContent = '壓縮截圖中…';
   try {
     const prepared = await prepareBookingScreenshot(file);
@@ -2210,6 +2212,7 @@ $('bkFile').onchange = e => { handleBkFile(e.target.files[0]); e.target.value = 
 $('bkCam').onchange = e => { handleBkFile(e.target.files[0]); e.target.value = ''; };
 $('bkCancel').onclick = () => { $('bkModal').hidden = true; };
 $('bkSave').onclick = async () => {
+  if (!canEditBookings()) { toast('只有管理員可以儲存預約'); return; }
   let saved = null;
   const wantUpload = !!bkPendingFile;
   if (bkKind === 'flight') {
@@ -2492,10 +2495,11 @@ function renderBookings() {
   const b = trip.bookings;
   const box = $('bookAll');
   let html = '';
+  const allowEdit = canEditBookings();
   const showF = bkFilter === 'all' || bkFilter === 'flight';
   const showS = bkFilter === 'all' || bkFilter === 'stay';
   if (showF) {
-    if (!b.flights.length) html += '<div class="empty">未有機票，撳上面新增</div>';
+    if (!b.flights.length) html += allowEdit ? '<div class="empty">未有機票，撳上面新增</div>' : '<div class="empty">未有機票</div>';
     b.flights.forEach((f, i) => {
       html += `<div class="card pass" data-id="${escH(f.id)}">
         <div class="pass-top">
@@ -2512,15 +2516,15 @@ function renderBookings() {
         ${bkPeopleNote(f)}
         ${bookingHasFile(f) ? `<button type="button" class="file-badge" data-a="file">已上載截圖 · 撳睇${bookingFileCloudLabel(f)}</button>` : ''}
         <div class="bk-actions">
-          <button class="ghost sm" data-a="edit">編輯</button>
+          ${allowEdit ? '<button class="ghost sm" data-a="edit">編輯</button>' : ''}
           ${bookingHasFile(f) ? `<button class="ghost sm" data-a="file">睇檔案</button>` : ''}
-          <button class="ghost sm danger-text" data-a="del">刪除</button>
+          ${allowEdit ? '<button class="ghost sm danger-text" data-a="del">刪除</button>' : ''}
         </div>
       </div>`;
     });
   }
   if (showS) {
-    if (!b.stays.length) html += '<div class="empty">未有住宿，撳上面新增</div>';
+    if (!b.stays.length) html += allowEdit ? '<div class="empty">未有住宿，撳上面新增</div>' : '<div class="empty">未有住宿</div>';
     b.stays.forEach(s => {
       html += `<div class="card" data-id="${escH(s.id)}" data-kind="stay">
         <div class="stay-name">${escH(s.name)}</div>
@@ -2530,9 +2534,9 @@ function renderBookings() {
         ${bkPeopleNote(s, ' style="margin-top:8px"')}
         ${bookingHasFile(s) ? `<button type="button" class="file-badge" data-a="file">已上載截圖 · 撳睇${bookingFileCloudLabel(s)}</button>` : ''}
         <div class="bk-actions">
-          <button class="ghost sm" data-a="edit">編輯</button>
+          ${allowEdit ? '<button class="ghost sm" data-a="edit">編輯</button>' : ''}
           ${bookingHasFile(s) ? `<button class="ghost sm" data-a="file">睇檔案</button>` : ''}
-          <button class="ghost sm danger-text" data-a="del">刪除</button>
+          ${allowEdit ? '<button class="ghost sm danger-text" data-a="del">刪除</button>' : ''}
         </div>
       </div>`;
     });
@@ -2546,29 +2550,42 @@ function renderBookings() {
       const a = btn.dataset.a;
       if (isStay) {
         const s = trip.bookings.stays.find(x => x.id === id);
-        if (a === 'edit') openBkModal('stay', s);
+        if (a === 'edit') {
+          if (!canEditBookings()) { toast('只有管理員可以編輯預約'); return; }
+          openBkModal('stay', s);
+        }
         if (a === 'file') openBkFile(s);
-        if (a === 'del') confirmAsk('刪除呢間住宿？', async () => {
-          if (s.fileId) await deleteBookingFsFile(trip.id, s.fileId);
-          if (s.fileStoragePath) await deleteBookingCloudFile(s.fileStoragePath);
-          if (s.fileId) await idbDel(s.fileId);
-          trip.bookings.stays = trip.bookings.stays.filter(x => x.id !== id);
-          saveTrip(trip); renderBookings();
-        });
+        if (a === 'del') {
+          if (!canEditBookings()) { toast('只有管理員可以刪除預約'); return; }
+          confirmAsk('刪除呢間住宿？', async () => {
+            if (s.fileId) await deleteBookingFsFile(trip.id, s.fileId);
+            if (s.fileStoragePath) await deleteBookingCloudFile(s.fileStoragePath);
+            if (s.fileId) await idbDel(s.fileId);
+            trip.bookings.stays = trip.bookings.stays.filter(x => x.id !== id);
+            saveTrip(trip); renderBookings();
+          });
+        }
       } else {
         const f = trip.bookings.flights.find(x => x.id === id);
-        if (a === 'edit') openBkModal('flight', f);
+        if (a === 'edit') {
+          if (!canEditBookings()) { toast('只有管理員可以編輯預約'); return; }
+          openBkModal('flight', f);
+        }
         if (a === 'file') openBkFile(f);
-        if (a === 'del') confirmAsk('刪除呢張機票？', async () => {
-          if (f.fileId) await deleteBookingFsFile(trip.id, f.fileId);
-          if (f.fileStoragePath) await deleteBookingCloudFile(f.fileStoragePath);
-          if (f.fileId) await idbDel(f.fileId);
-          trip.bookings.flights = trip.bookings.flights.filter(x => x.id !== id);
-          saveTrip(trip); renderBookings();
-        });
+        if (a === 'del') {
+          if (!canEditBookings()) { toast('只有管理員可以刪除預約'); return; }
+          confirmAsk('刪除呢張機票？', async () => {
+            if (f.fileId) await deleteBookingFsFile(trip.id, f.fileId);
+            if (f.fileStoragePath) await deleteBookingCloudFile(f.fileStoragePath);
+            if (f.fileId) await idbDel(f.fileId);
+            trip.bookings.flights = trip.bookings.flights.filter(x => x.id !== id);
+            saveTrip(trip); renderBookings();
+          });
+        }
       }
     });
   });
+  updateBookingEditUI();
 }
 renderBookings();
 
@@ -3481,6 +3498,21 @@ function canForceCloudSync() {
   const email = ((cloudUser && cloudUser.email) || '').trim().toLowerCase();
   return email === FORCE_SYNC_EMAIL;
 }
+/** 預約編輯權：未登入＝本機照舊可改；已登入則只有 FORCE_SYNC_EMAIL 可新增／編輯／刪除／換附件。其他人只可睇附件。 */
+function canEditBookings() {
+  if (!cloudUser) return true;
+  return canForceCloudSync();
+}
+function updateBookingEditUI() {
+  const allow = canEditBookings();
+  const addF = $('addFlight'), addS = $('addStay');
+  if (addF) addF.hidden = !allow;
+  if (addS) addS.hidden = !allow;
+  const addRow = addF && addF.parentElement;
+  if (addRow && addRow.classList && addRow.classList.contains('add-row')) addRow.hidden = !allow;
+  const pick = document.querySelector('#bkModal .photo-pick');
+  if (pick) pick.hidden = !allow;
+}
 
 function renderCloudAccountUI() {
   const out = $('cloudSignedOut'), inn = $('cloudSignedIn'), line = $('cloudUserLine');
@@ -3509,6 +3541,7 @@ function renderCloudAccountUI() {
     }
   }
   renderCompanionUI();
+  try { updateBookingEditUI(); if (typeof renderBookings === 'function') renderBookings(); } catch (e) {}
   cloudSetStatus(cloudLastStatus);
 }
 
