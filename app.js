@@ -404,40 +404,32 @@ function migrateTripSettings() {
 
 function tripPartyLabel(t) {
   if (!t) return '';
+  /* 人員跟成員名單 live，唔靠預約硬編碼 people／guest */
   const names = (t.members || []).map(m => (m && m.name) || '').filter(Boolean);
-  let pax = 0;
-  const b = t.bookings;
-  if (b && !Array.isArray(b)) {
-    [...(b.flights || []), ...(b.stays || [])].forEach(x => { pax = Math.max(pax, +x.people || 0); });
-  } else if (Array.isArray(b)) {
-    b.forEach(x => { pax = Math.max(pax, +x.people || +(x.split) || 0); });
-  }
-  if (!pax) pax = names.length;
-  if (!names.length && !pax) return '';
-  if (names.length && pax > names.length) return '👥 ' + names.join('、') + ' · ' + pax + ' 人';
-  if (names.length) return '👥 ' + names.join('、') + (pax > 1 ? ' · ' + pax + ' 人' : '');
-  return '👥 ' + pax + ' 人';
+  const pax = names.length;
+  if (!names.length) return '';
+  return '👥 ' + names.join('、') + (pax > 1 ? ' · ' + pax + ' 人' : '');
+}
+/* 預約「人員」顯示一律跟當前旅程 members（live）；唔用死寫 guest／people。memberIds 只作儲存／編輯相容。 */
+function bookingPartyLive(x, t) {
+  const tripRef = t || ((typeof trip !== 'undefined' && trip) ? trip : (typeof getTrip === 'function' ? getTrip() : null));
+  const mem = ((tripRef && tripRef.members) || []).filter(m => m && m.id);
+  const names = mem.map(m => String(m.name || '').trim()).filter(Boolean);
+  return {
+    names,
+    label: names.join('、'),
+    count: names.length,
+    ids: mem.map(m => m.id)
+  };
 }
 function resolveBookingGuest(x, t) {
-  if (!x) return '';
-  const tripRef = t || ((typeof trip !== 'undefined' && trip) ? trip : (typeof getTrip === 'function' ? getTrip() : null));
-  const mem = (tripRef && tripRef.members) || [];
-  if (Array.isArray(x.memberIds) && x.memberIds.length) {
-    const names = x.memberIds.map(id => {
-      const m = mem.find(mm => mm && mm.id === id);
-      return m && m.name ? String(m.name).trim() : '';
-    }).filter(Boolean);
-    if (names.length) return names.join('、');
-  }
-  const g = String(x.guest || '').trim();
-  if (g) return g;
-  if (mem.length) return mem.map(m => m && m.name).filter(Boolean).join('、');
-  return '';
+  return bookingPartyLive(x, t).label;
 }
 function bkPeopleNote(x, style) {
   if (!x) return '';
-  const p = +x.people || 0;
-  const g = resolveBookingGuest(x);
+  const party = bookingPartyLive(x);
+  const g = party.label;
+  const p = party.count;
   if (!p && !g && !x.amount) return '';
   const bits = [];
   if (g || p) bits.push('人員' + (g ? ' ' + g : '') + (p ? (g ? ' · ' : ' ') + p + ' 人' : ''));
@@ -448,18 +440,23 @@ function bkPeopleNote(x, style) {
 function syncBookingGuestsFromMembers(t) {
   if (!t || !t.bookings || Array.isArray(t.bookings)) return false;
   let changed = false;
+  const allIds = (t.members || []).map(m => m && m.id).filter(Boolean);
+  const labelAll = (t.members || []).map(m => m && m.name).filter(Boolean).join('、');
   const syncOne = (x) => {
     if (!x) return;
-    if (!Array.isArray(x.memberIds) || !x.memberIds.length) {
-      const pax = Math.max(1, +x.people || 1);
-      const ids = (t.members || []).slice(0, Math.min(pax, (t.members || []).length)).map(m => m.id);
-      if (ids.length) { x.memberIds = ids; changed = true; }
+    /* 跟成員名單：清走已刪 id，並以當前全部成員做預約人員（增刪改名即更新） */
+    let ids = Array.isArray(x.memberIds) ? x.memberIds.filter(id => allIds.includes(id)) : [];
+    const same = ids.length === allIds.length && allIds.every(id => ids.includes(id));
+    if (!same) {
+      ids = allIds.slice();
+      x.memberIds = ids;
+      changed = true;
+    } else if (!Array.isArray(x.memberIds)) {
+      x.memberIds = ids;
+      changed = true;
     }
-    const label = resolveBookingGuest(x, t);
-    if (label && x.guest !== label) { x.guest = label; changed = true; }
-    if (Array.isArray(x.memberIds) && x.memberIds.length && +x.people !== x.memberIds.length) {
-      x.people = x.memberIds.length; changed = true;
-    }
+    if (labelAll !== String(x.guest || '')) { x.guest = labelAll; changed = true; }
+    if (+x.people !== ids.length) { x.people = ids.length; changed = true; }
   };
   (t.bookings.flights || []).forEach(syncOne);
   (t.bookings.stays || []).forEach(syncOne);
@@ -522,20 +519,17 @@ function ensurePartyMembers() {
     });
     const b = t.bookings;
     if (!b || Array.isArray(b)) return;
-    const pax = isBangkokTrip(t) ? 2 : (isKyushuTrip(t) ? 1 : 0);
-    if (!pax) return;
+    const allIds = (t.members || []).map(m => m && m.id).filter(Boolean);
     (b.flights || []).forEach(f => {
-      if (f.people == null || +f.people === 0) { f.people = pax; changed = true; }
-      if (!Array.isArray(f.memberIds)) {
-        f.memberIds = (t.members || []).slice(0, Math.min(pax, (t.members || []).length)).map(m => m.id);
-        if (f.memberIds.length) changed = true;
+      if (!Array.isArray(f.memberIds) || !f.memberIds.length) {
+        f.memberIds = allIds.slice();
+        changed = true;
       }
     });
     (b.stays || []).forEach(st => {
-      if (st.people == null || +st.people === 0) { st.people = pax; changed = true; }
-      if (!Array.isArray(st.memberIds)) {
-        st.memberIds = (t.members || []).slice(0, Math.min(pax, (t.members || []).length)).map(m => m.id);
-        if (st.memberIds.length) changed = true;
+      if (!Array.isArray(st.memberIds) || !st.memberIds.length) {
+        st.memberIds = allIds.slice();
+        changed = true;
       }
     });
     if (syncBookingGuestsFromMembers(t)) changed = true;
@@ -2227,22 +2221,17 @@ function renderPartyCard() {
   if (!$('partyList')) return;
   const tt = getTrip();
   const mem = (tt.members || []).filter(m => m && m.name);
-  let pax = 0;
-  const bb = tt.bookings;
-  if (bb && !Array.isArray(bb)) [...(bb.flights || []), ...(bb.stays || [])].forEach(x => { pax = Math.max(pax, +x.people || 0); });
-  if (!pax) pax = mem.length;
+  const pax = mem.length;
   const ps = $('partySub');
   if (ps) ps.textContent = pax ? (`呢個旅程 · ${pax} 人`) : '呢個旅程嘅旅客';
   const pl = $('partyList');
-  if (!mem.length && !pax) pl.innerHTML = '<p class="hint" style="margin:0">未有人員——去「成員」分頁新增</p>';
+  if (!mem.length) pl.innerHTML = '<p class="hint" style="margin:0">未有人員——去「成員」分頁新增</p>';
   else {
-    const rows = mem.map(m => {
+    pl.innerHTML = mem.map(m => {
       const sub = m.description || m.role || '旅客';
       const subCls = m.description ? ' style="color:var(--pri);font-weight:600"' : '';
       return `<div class="party-row">${partyAvHTML(m)}<div><b>${escH(m.name)}</b><small${subCls}>${escH(sub)}</small></div></div>`;
     }).join('');
-    const extra = (pax > mem.length) ? `<p class="hint" style="margin:8px 0 0">預約顯示共 ${pax} 人（Outlook 未見第二位姓名）</p>` : '';
-    pl.innerHTML = rows + extra;
   }
 }
 if ($('partyGoMem')) $('partyGoMem').onclick = () => {
@@ -2265,12 +2254,9 @@ function fillBkMemberPick(edit) {
   const box = $('bkMemberPick');
   if (!box) return;
   const mem = getTripMembers();
-  let selected = (edit && Array.isArray(edit.memberIds)) ? edit.memberIds.slice() : [];
-  if (!selected.length && edit && edit.guest) {
-    const names = String(edit.guest).split(/[、,，]/).map(s => s.trim()).filter(Boolean);
-    selected = mem.filter(m => names.includes(m.name)).map(m => m.id);
-  }
-  if (!selected.length && !edit && mem.length) selected = [mem[0].id];
+  let selected = (edit && Array.isArray(edit.memberIds)) ? edit.memberIds.filter(id => mem.some(m => m.id === id)) : [];
+  /* 新增／冇有效勾選 → 預設成個旅程成員（跟名單） */
+  if (!selected.length && mem.length) selected = mem.map(m => m.id);
   if (!mem.length) {
     box.innerHTML = '<p class="hint" style="margin:0">未有成員——去「成員」分頁新增後可喺呢度勾選</p>';
     return;
