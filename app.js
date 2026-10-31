@@ -3709,6 +3709,10 @@ function initFirebase() {
     cloudSetStatus('Firebase SDK 未載入（離線或被擋）');
     return false;
   }
+  if (typeof firebase.auth !== 'function') {
+    cloudSetStatus('Firebase Auth SDK 未載入');
+    return false;
+  }
   try {
     fbApp = firebase.apps && firebase.apps.length ? firebase.app() : firebase.initializeApp(FIREBASE_CONFIG);
     fbAuth = firebase.auth();
@@ -4133,6 +4137,14 @@ async function cloudSignIn() {
   const email = ($('cloudEmail') && $('cloudEmail').value || '').trim();
   const pass = ($('cloudPass') && $('cloudPass').value) || '';
   if (!email || !pass) { toast('請填電郵同密碼'); return; }
+  if (!fbAuth || !cloudReady) {
+    try { initFirebase(); } catch (e) { console.warn('[cloud] re-init', e); }
+  }
+  if (!fbAuth) {
+    toast('Firebase 未就緒，請檢查網絡後重新整理頁面再登入');
+    cloudSetStatus('Firebase 未就緒');
+    return;
+  }
   try {
     await fbAuth.signInWithEmailAndPassword(email, pass);
     toast('登入成功');
