@@ -3603,7 +3603,7 @@ showDay(0);
 
 /* ---------- Station 8b: Firebase Auth + Firestore sync ---------- */
 const FIREBASE_CONFIG = {
-  apiKey: 'AIzaSyArozM-ttFNOyfLVrKT2HWLBmDqyYx8y-A',
+  apiKey: 'AIzaSyDRxJtO8UfE2fuAf84p0y0h_CrPs22ZU1k',
   authDomain: 'my-journey-d5690.firebaseapp.com',
   projectId: 'my-journey-d5690',
   storageBucket: 'my-journey-d5690.firebasestorage.app',
