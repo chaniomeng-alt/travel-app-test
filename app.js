@@ -3438,8 +3438,7 @@ $('fab').onclick = () => setFx(FX[(FX.findIndex(f => f[0] === curFx) + 1) % FX.l
 const savedFx = getSetting('fx', isInTripView() ? (isBangkokTrip(getTrip()) ? 'none' : 'leaf') : 'none');
 setFx(FX.some(f => f[0] === savedFx) ? savedFx : (isInTripView() && isBangkokTrip(getTrip()) ? 'none' : 'leaf'));
 if ($('setHint') && isInTripView()) {
-  const tt = getTrip();
-  $('setHint').textContent = `「${tt.title}」專用設定 · 切換旅程唔會跟住改`;
+  /* 唔再顯示「某某旅程專用設定」說明；保留預設一句 */
   const sub = document.querySelector('#v-set .page-sub');
   if (sub) sub.textContent = '只影響呢個旅程嘅樣';
   if (typeof renderPartyCard === 'function') renderPartyCard();
@@ -3638,7 +3637,7 @@ function cloudSetStatus(msg) {
   }
   const sub = $('cloudSub');
   if (sub && cloudUser) sub.textContent = '已登入 · 改行程會自動同步（約 1.5 秒後）';
-  else if (sub && !cloudUser) sub.textContent = '登入後同步旅程到 Firebase（本機資料唔會自動清）';
+  else if (sub && !cloudUser) sub.textContent = '';
 }
 
 function cloudAuthError(err) {
@@ -3716,9 +3715,9 @@ function canForceCloudSync() {
   const email = ((cloudUser && cloudUser.email) || '').trim().toLowerCase();
   return email === FORCE_SYNC_EMAIL;
 }
-/** 預約編輯權：未登入＝本機照舊可改；已登入則只有 FORCE_SYNC_EMAIL 可新增／編輯／刪除／換附件。其他人只可睇附件。 */
+/** 預約編輯權：未登入／同伴＝只可睇；只有 FORCE_SYNC_EMAIL（主帳）可新增／編輯／刪除／換附件。 */
 function canEditBookings() {
-  if (!cloudUser) return true;
+  if (!cloudUser) return false;
   return canForceCloudSync();
 }
 function updateBookingEditUI() {

@@ -20,7 +20,7 @@
 /* SW escape: app.js crash 前都要跑；一次清舊 cache 再註冊，唔再卡死 */
 (function () {
   if (!('serviceWorker' in navigator)) return;
-  var WANT = 'v6-28-relink-files';
+  var WANT = 'v6-29-ui-hide';
   var KEY = 'travel_sw_bust_v';
   function reg() {
     navigator.serviceWorker.register('./sw.js').then(function (reg) {
@@ -369,14 +369,13 @@
       <button type="button" class="btn ghost" id="partyGoMem" style="width:100%;margin-top:10px">去「成員」分頁管理</button>
     </div>
     <div class="card" id="cloudCard">
-      <div class="set-h"><div class="ci">☁️</div><div><b>雲端帳號</b><small id="cloudSub">登入後同步旅程到 Firebase（本機資料唔會自動清）</small></div></div>
+      <div class="set-h"><div class="ci">☁️</div><div><b>雲端帳號</b><small id="cloudSub"></small></div></div>
       <div id="cloudSignedOut">
         <label>電郵<input class="fld" type="email" id="cloudEmail" autocomplete="username" placeholder="you@example.com" style="width:100%;margin-top:6px"></label>
         <label style="display:block;margin-top:8px">密碼<input class="fld" type="password" id="cloudPass" autocomplete="current-password" placeholder="至少 6 個字元" style="width:100%;margin-top:6px"></label>
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
           <button type="button" class="btn" id="btnCloudSignIn">登入</button>
         </div>
-        <p class="hint" style="margin-top:8px">公開註冊已關閉。帳號由管理員喺設定產生（電郵＋臨時密碼）之後先登入。</p>
       </div>
       <div id="cloudSignedIn" hidden>
         <p id="cloudUserLine" style="margin:0 0 8px;font-weight:700"></p>
@@ -409,7 +408,6 @@
         <button type="button" class="btn ghost" id="btnLoadDemo">載入示範資料</button>
       </div>
       <input type="file" id="importFile" accept="application/json,.json" hidden>
-      <p class="hint" style="margin-top:8px">匯出會包埋預約附件（PDF／相片）。示範資料包括九州之旅同曼谷之旅（Outlook 機票酒店，無預約編號）。匯入會覆蓋本機資料。</p>
     </div>
     <p class="hint" id="setHint">小小貓陪你去旅行 🐾</p>
   </section>
