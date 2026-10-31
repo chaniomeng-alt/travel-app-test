@@ -574,3 +574,9 @@ body.dark .act .act-mv button { background:#2A221C; }
   .act .act-side .map { width:30px; height:30px; }
   .act .act-side .act-mv button { padding:0 7px; }
 }
+
+/* 未登入／同伴：預約頁唔顯示上載／換檔操作 */
+#v-book.bk-readonly .photo-pick,
+#v-book.bk-readonly #bkPhotoPick,
+#bkModal .photo-pick[hidden] { display: none !important; }
+#v-book.bk-readonly .add-row { display: none !important; }

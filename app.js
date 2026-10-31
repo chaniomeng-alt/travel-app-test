@@ -2303,7 +2303,10 @@ function openBkModal(kind, edit) {
   $('bkFlightFields').hidden = kind !== 'flight';
   $('bkStayFields').hidden = kind !== 'stay';
   $('bkErr').textContent = '';
-  $('bkFileNote').textContent = edit && bookingHasFile(edit) ? ('已上載' + ((edit.fileFsSynced || edit.fileStoragePath) ? '（已同步雲端）' : '（本機；儲存／同步後上雲）')) : '未上載';
+  const hasF = !!(edit && bookingHasFile(edit));
+  $('bkFileNote').textContent = hasF ? ('已上載' + ((edit.fileFsSynced || edit.fileStoragePath) ? '（已同步雲端）' : '（本機；儲存／同步後上雲）')) : '未上載';
+  const clr = $('bkClearFile');
+  if (clr) clr.hidden = !hasF;
   $('bkNote').value = edit ? (edit.note || edit.meta || '') : '';
   $('bkAmt').value = edit && edit.amount ? edit.amount : '';
   $('bkPeople').value = edit && edit.people ? edit.people : 1;
@@ -2323,6 +2326,7 @@ function openBkModal(kind, edit) {
     $('bkQ').value = edit ? (edit.q || edit.name || '') : '';
   }
   $('bkModal').hidden = false;
+  updateBookingEditUI(); /* modal 開咗先顯示 photo-pick（主帳） */
 }
 async function handleBkFile(file) {
   if (!file) return;
@@ -2332,6 +2336,7 @@ async function handleBkFile(file) {
     const prepared = await prepareBookingScreenshot(file);
     bkPendingFile = new File([prepared.blob], prepared.fileName, { type: prepared.mime });
     $('bkFileNote').textContent = '已轉成壓縮截圖約 ' + Math.max(1, Math.round(prepared.size / 1024)) + 'KB（儲存後同步雲端）';
+    if ($('bkClearFile')) $('bkClearFile').hidden = false;
   } catch (e) {
     bkPendingFile = null;
     const msg = (e && e.message) || '壓縮失敗，請改用截圖';
@@ -2341,7 +2346,31 @@ async function handleBkFile(file) {
 }
 $('bkFile').onchange = e => { handleBkFile(e.target.files[0]); e.target.value = ''; };
 $('bkCam').onchange = e => { handleBkFile(e.target.files[0]); e.target.value = ''; };
-$('bkCancel').onclick = () => { $('bkModal').hidden = true; };
+if ($('bkClearFile')) $('bkClearFile').onclick = async () => {
+  if (!canEditBookings()) { toast('只有管理員可以移除附件'); return; }
+  if (!bkEdit || !bookingHasFile(bkEdit)) { bkPendingFile = null; $('bkFileNote').textContent = '未上載'; $('bkClearFile').hidden = true; return; }
+  confirmAsk('移除呢個預約附件？', async () => {
+    try {
+      if (bkEdit.fileId && trip && trip.id) await deleteBookingFsFile(trip.id, bkEdit.fileId);
+      if (bkEdit.fileStoragePath) await deleteBookingCloudFile(bkEdit.fileStoragePath);
+      if (bkEdit.fileId) await idbDel(bkEdit.fileId);
+    } catch (e) { console.warn('[bkfile] clear', e); }
+    bkEdit.fileId = '';
+    bkEdit.fileStoragePath = '';
+    bkEdit.fileDownloadURL = '';
+    bkEdit.fileName = '';
+    bkEdit.fileMime = '';
+    bkEdit.fileSize = 0;
+    bkEdit.fileFsSynced = false;
+    bkEdit.fileCloudAt = 0;
+    bkPendingFile = null;
+    $('bkFileNote').textContent = '未上載（儲存後生效）';
+    $('bkClearFile').hidden = true;
+    /* mark cleared so save writes empty file fields */
+    bkEdit._clearedFile = true;
+  });
+};
+$('bkCancel').onclick = () => { $('bkModal').hidden = true; updateBookingEditUI(); };
 $('bkSave').onclick = async () => {
   if (!canEditBookings()) { toast('只有管理員可以儲存預約'); return; }
   let saved = null;
@@ -2416,7 +2445,7 @@ $('bkSave').onclick = async () => {
     if (ix >= 0) arr[ix] = o; else arr.push(o);
     saved = o;
   }
-  saveTrip(trip); $('bkModal').hidden = true; renderBookings();
+  saveTrip(trip); $('bkModal').hidden = true; updateBookingEditUI(); renderBookings();
   if (wantUpload && saved && cloudUser) {
     void (async () => {
       const ok = await uploadBookingCloudFile(saved);
@@ -2645,10 +2674,10 @@ function renderBookings() {
         <div class="pass-foot"><div>航班編號<b>${escH(f.flightNo)}</b></div><div style="text-align:right">日期<b>${fmtBkDate(f.date)}</b></div></div>
         ${f.note ? `<div class="pass-note">${escH(f.note)}</div>` : ''}
         ${bkPeopleNote(f)}
-        ${bookingHasFile(f) ? `<button type="button" class="file-badge" data-a="file">已上載截圖 · 撳睇${bookingFileCloudLabel(f)}</button>` : ''}
-        <div class="bk-actions">
+        ${allowEdit && bookingHasFile(f) ? `<button type="button" class="file-badge" data-a="file">已上載截圖 · 撳睇${bookingFileCloudLabel(f)}</button>` : ''}
+        <div class="bk-actions"${allowEdit ? '' : ' hidden'}>
           ${allowEdit ? '<button class="ghost sm" data-a="edit">編輯</button>' : ''}
-          ${bookingHasFile(f) ? `<button class="ghost sm" data-a="file">睇檔案</button>` : ''}
+          ${allowEdit && bookingHasFile(f) ? '<button class="ghost sm" data-a="file">睇檔案</button>' : ''}
           ${allowEdit ? '<button class="ghost sm danger-text" data-a="del">刪除</button>' : ''}
         </div>
       </div>`;
@@ -2663,10 +2692,10 @@ function renderBookings() {
         <div class="stay-meta">${escH(s.addr || s.meta || s.note || '')}</div>
         <a class="maplink" href="${escH(gmap(s.q || s.name))}" target="_blank" rel="noopener">${ic('pin')}Google 地圖</a>
         ${bkPeopleNote(s, ' style="margin-top:8px"')}
-        ${bookingHasFile(s) ? `<button type="button" class="file-badge" data-a="file">已上載截圖 · 撳睇${bookingFileCloudLabel(s)}</button>` : ''}
-        <div class="bk-actions">
+        ${allowEdit && bookingHasFile(s) ? `<button type="button" class="file-badge" data-a="file">已上載截圖 · 撳睇${bookingFileCloudLabel(s)}</button>` : ''}
+        <div class="bk-actions"${allowEdit ? '' : ' hidden'}>
           ${allowEdit ? '<button class="ghost sm" data-a="edit">編輯</button>' : ''}
-          ${bookingHasFile(s) ? `<button class="ghost sm" data-a="file">睇檔案</button>` : ''}
+          ${allowEdit && bookingHasFile(s) ? '<button class="ghost sm" data-a="file">睇檔案</button>' : ''}
           ${allowEdit ? '<button class="ghost sm danger-text" data-a="del">刪除</button>' : ''}
         </div>
       </div>`;
@@ -2676,6 +2705,17 @@ function renderBookings() {
   box.querySelectorAll('.card').forEach(card => {
     const id = card.dataset.id;
     const isStay = card.dataset.kind === 'stay';
+    const entry = isStay
+      ? trip.bookings.stays.find(x => x.id === id)
+      : trip.bookings.flights.find(x => x.id === id);
+    /* 未登入／同伴：冇檔案操作掣；有附件就撳卡片睇 */
+    if (!allowEdit && entry && bookingHasFile(entry)) {
+      card.style.cursor = 'pointer';
+      card.addEventListener('click', e => {
+        if (e.target.closest('a,button,[data-a]')) return;
+        openBkFile(entry);
+      });
+    }
     card.querySelectorAll('[data-a]').forEach(btn => btn.onclick = async e => {
       e.preventDefault(); e.stopPropagation();
       const a = btn.dataset.a;
@@ -3739,8 +3779,14 @@ function updateBookingEditUI() {
   if (addS) addS.hidden = !allow;
   const addRow = addF && addF.parentElement;
   if (addRow && addRow.classList && addRow.classList.contains('add-row')) addRow.hidden = !allow;
-  const pick = document.querySelector('#bkModal .photo-pick');
-  if (pick) pick.hidden = !allow;
+  /* 上載／影相／移除附件：只有主帳；未登入／同伴唔顯示 */
+  const pick = $('bkPhotoPick') || document.querySelector('#bkModal .photo-pick');
+  const modalOpen = !!( $('bkModal') && !$('bkModal').hidden );
+  if (pick) pick.hidden = !(allow && modalOpen);
+  const clr = $('bkClearFile');
+  if (clr && !allow) clr.hidden = true;
+  const book = $('v-book');
+  if (book) book.classList.toggle('bk-readonly', !allow);
 }
 
 function renderCloudAccountUI() {

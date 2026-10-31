@@ -20,7 +20,7 @@
 /* SW escape: app.js crash 前都要跑；一次清舊 cache 再註冊，唔再卡死 */
 (function () {
   if (!('serviceWorker' in navigator)) return;
-  var WANT = 'v6-31-backup-auth';
+  var WANT = 'v6-32-booking-files-ui';
   var KEY = 'travel_sw_bust_v';
   function reg() {
     navigator.serviceWorker.register('./sw.js').then(function (reg) {
@@ -165,11 +165,12 @@
   <div class="tm-lab">分攤成員（可多選）</div>
   <div class="mem-chips" id="bkMemberPick"></div>
   <p class="hint" style="margin:4px 0 8px">揀咗成員會自動更新人數同人員顯示</p>
-  <div class="photo-pick">
+  <div class="photo-pick" id="bkPhotoPick" hidden>
     <label for="bkFile">📎 上載 PDF／相片（自動轉截圖）</label>
     <input type="file" id="bkFile" accept="image/*,application/pdf" hidden>
     <label for="bkCam">📷 影相</label>
     <input type="file" id="bkCam" accept="image/*" capture="environment" hidden>
+    <button type="button" class="ghost sm danger-text" id="bkClearFile" hidden>移除附件</button>
     <span id="bkFileNote">未上載</span>
   </div>
   <div class="tm-err" id="bkErr"></div>
