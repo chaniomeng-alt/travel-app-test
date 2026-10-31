@@ -288,7 +288,7 @@ const TH_BOOKINGS = {
     { id:'tf2', route:'曼谷 → 澳門', from:'BKK', to:'MFM', dep:'13:30', arr:'17:35', flightNo:'NX935', date:'2026-12-27', people:2, guest:'CHA', amount:0, note:'澳門航空 · 素萬那普機場 → 澳門國際機場 · 經濟艙 A320 · 2 位' }
   ],
   stays: [
-    { id:'ts1', name:'曼谷柏悦酒店', dates:'12/24（15:00 後）– 12/26（12:00 前）', checkIn:'2026-12-24', checkOut:'2026-12-26', meta:'Central Embassy, 88 Witthayu Rd, Lumphini · 豪華房 · 特大雙人床 · 含早餐（25、26日）· 2 成人', q:'Park Hyatt Bangkok', people:2, guest:'CHA', amount:0 }
+    { id:'ts1', name:'曼谷柏悦酒店', dates:'12/24（15:00 後）– 12/26（12:00 前）', checkIn:'2026-12-24', checkOut:'2026-12-26', meta:'Central Embassy, 88 Witthayu Rd, Lumphini · 豪華房 · 含早餐（25、26日）· 2 成人', q:'Park Hyatt Bangkok', people:2, guest:'CHA', amount:0 }
   ]
 };
 const TH_DEFAULT_TODOS = [
@@ -533,6 +533,7 @@ function ensurePartyMembers() {
       }
     });
     if (syncBookingGuestsFromMembers(t)) changed = true;
+    if (scrubParkHyattBedDesc(t)) changed = true;
   });
   return changed;
 }
@@ -2459,6 +2460,10 @@ function closeFileView() {
   }
 }
 async function openBkFile(entry) {
+  if (!canViewBookingFiles()) {
+    toast('請先登入先可以睇預約附件');
+    return;
+  }
   const meta = (entry && typeof entry === 'object') ? entry : { fileId: entry || '' };
   const fileId = meta.fileId || '';
   if (!fileId && !meta.fileFsSynced && !meta.fileStoragePath && !meta.fileDownloadURL) return alert('未有上載檔案');
@@ -2642,6 +2647,7 @@ function renderBookings() {
   const box = $('bookAll');
   let html = '';
   const allowEdit = canEditBookings();
+  const allowView = canViewBookingFiles(); /* 登入先睇附件；未登入唔開 */
   const showF = bkFilter === 'all' || bkFilter === 'flight';
   const showS = bkFilter === 'all' || bkFilter === 'stay';
   if (showF) {
@@ -2660,10 +2666,10 @@ function renderBookings() {
         <div class="pass-foot"><div>航班編號<b>${escH(f.flightNo)}</b></div><div style="text-align:right">日期<b>${fmtBkDate(f.date)}</b></div></div>
         ${f.note ? `<div class="pass-note">${escH(f.note)}</div>` : ''}
         ${bkPeopleNote(f)}
-        ${allowEdit && bookingHasFile(f) ? `<button type="button" class="file-badge" data-a="file">已上載截圖 · 撳睇${bookingFileCloudLabel(f)}</button>` : ''}
-        <div class="bk-actions"${allowEdit ? '' : ' hidden'}>
+        ${allowView && bookingHasFile(f) ? `<button type="button" class="file-badge" data-a="file">已上載截圖 · 撳睇${bookingFileCloudLabel(f)}</button>` : ''}
+        <div class="bk-actions"${(allowEdit || (allowView && bookingHasFile(f))) ? '' : ' hidden'}>
           ${allowEdit ? '<button class="ghost sm" data-a="edit">編輯</button>' : ''}
-          ${allowEdit && bookingHasFile(f) ? '<button class="ghost sm" data-a="file">睇檔案</button>' : ''}
+          ${allowView && bookingHasFile(f) ? '<button class="ghost sm" data-a="file">睇檔案</button>' : ''}
           ${allowEdit ? '<button class="ghost sm danger-text" data-a="del">刪除</button>' : ''}
         </div>
       </div>`;
@@ -2675,13 +2681,13 @@ function renderBookings() {
       html += `<div class="card" data-id="${escH(s.id)}" data-kind="stay">
         <div class="stay-name">${escH(s.name)}</div>
         <div class="stay-date">${escH(stayDatesLabel(s))}</div>
-        <div class="stay-meta">${escH(s.addr || s.meta || s.note || '')}</div>
+        <div class="stay-meta">${escH(stayMetaDisplay(s))}</div>
         <a class="maplink" href="${escH(gmap(s.q || s.name))}" target="_blank" rel="noopener">${ic('pin')}Google 地圖</a>
         ${bkPeopleNote(s, ' style="margin-top:8px"')}
-        ${allowEdit && bookingHasFile(s) ? `<button type="button" class="file-badge" data-a="file">已上載截圖 · 撳睇${bookingFileCloudLabel(s)}</button>` : ''}
-        <div class="bk-actions"${allowEdit ? '' : ' hidden'}>
+        ${allowView && bookingHasFile(s) ? `<button type="button" class="file-badge" data-a="file">已上載截圖 · 撳睇${bookingFileCloudLabel(s)}</button>` : ''}
+        <div class="bk-actions"${(allowEdit || (allowView && bookingHasFile(s))) ? '' : ' hidden'}>
           ${allowEdit ? '<button class="ghost sm" data-a="edit">編輯</button>' : ''}
-          ${allowEdit && bookingHasFile(s) ? '<button class="ghost sm" data-a="file">睇檔案</button>' : ''}
+          ${allowView && bookingHasFile(s) ? '<button class="ghost sm" data-a="file">睇檔案</button>' : ''}
           ${allowEdit ? '<button class="ghost sm danger-text" data-a="del">刪除</button>' : ''}
         </div>
       </div>`;
@@ -2694,8 +2700,8 @@ function renderBookings() {
     const entry = isStay
       ? trip.bookings.stays.find(x => x.id === id)
       : trip.bookings.flights.find(x => x.id === id);
-    /* 未登入／同伴：冇檔案操作掣；有附件就撳卡片睇 */
-    if (!allowEdit && entry && bookingHasFile(entry)) {
+    /* 登入後（含同伴）可睇附件；未登入唔綁開檔。主帳用掣，同伴可撳卡片或「睇檔案」。 */
+    if (allowView && !allowEdit && entry && bookingHasFile(entry)) {
       card.style.cursor = 'pointer';
       card.addEventListener('click', e => {
         if (e.target.closest('a,button,[data-a]')) return;
@@ -2711,7 +2717,10 @@ function renderBookings() {
           if (!canEditBookings()) { toast('只有管理員可以編輯預約'); return; }
           openBkModal('stay', s);
         }
-        if (a === 'file') openBkFile(s);
+        if (a === 'file') {
+          if (!canViewBookingFiles()) { toast('請先登入先可以睇預約附件'); return; }
+          openBkFile(s);
+        }
         if (a === 'del') {
           if (!canEditBookings()) { toast('只有管理員可以刪除預約'); return; }
           confirmAsk('刪除呢間住宿？', async () => {
@@ -2728,7 +2737,10 @@ function renderBookings() {
           if (!canEditBookings()) { toast('只有管理員可以編輯預約'); return; }
           openBkModal('flight', f);
         }
-        if (a === 'file') openBkFile(f);
+        if (a === 'file') {
+          if (!canViewBookingFiles()) { toast('請先登入先可以睇預約附件'); return; }
+          openBkFile(f);
+        }
         if (a === 'del') {
           if (!canEditBookings()) { toast('只有管理員可以刪除預約'); return; }
           confirmAsk('刪除呢張機票？', async () => {
@@ -3757,6 +3769,41 @@ function canForceCloudSync() {
 function canEditBookings() {
   if (!cloudUser) return false;
   return canForceCloudSync();
+}
+/** 睇預約附件：已登入（主帳／同伴）先可以；未登入唔開截圖／檔案。 */
+function canViewBookingFiles() {
+  return isLoggedIn();
+}
+/** 住宿 meta 顯示：收埋床型描述（大雙人床等），唔改 Auth。 */
+function stayMetaDisplay(s) {
+  let txt = String((s && (s.addr || s.meta || s.note)) || '');
+  txt = txt
+    .replace(/\s*·\s*特大雙人床/g, '')
+    .replace(/\s*·\s*大雙人床/g, '')
+    .replace(/特大雙人床\s*·\s*/g, '')
+    .replace(/大雙人床\s*·\s*/g, '')
+    .replace(/特大雙人床/g, '')
+    .replace(/大雙人床/g, '')
+    .replace(/\s*·\s*·\s*/g, ' · ')
+    .replace(/^\s*·\s*|\s*·\s*$/g, '')
+    .trim();
+  return txt;
+}
+/** 本機／雲端已有資料：永久收埋柏悅床型字。 */
+function scrubParkHyattBedDesc(t) {
+  if (!t || !t.bookings || !Array.isArray(t.bookings.stays)) return false;
+  let changed = false;
+  t.bookings.stays.forEach(st => {
+    if (!st) return;
+    const name = String(st.name || '') + String(st.q || '');
+    if (!/柏悦|Park\s*Hyatt/i.test(name)) return;
+    ['meta', 'note', 'addr'].forEach(k => {
+      if (!st[k]) return;
+      const next = stayMetaDisplay({ meta: st[k] });
+      if (next !== st[k]) { st[k] = next; changed = true; }
+    });
+  });
+  return changed;
 }
 function updateBookingEditUI() {
   const allow = canEditBookings();

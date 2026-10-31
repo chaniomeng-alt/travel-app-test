@@ -1,5 +1,5 @@
 /* Station 6 — service worker（GitHub Pages 子路徑，全部用相對路徑） */
-const CACHE_VERSION = 'v6-33-guest-members';
+const CACHE_VERSION = 'v6-34-logout-attach';
 const CACHE_NAME = 'travel-app-' + CACHE_VERSION;
 const SHELL_URLS = [
   './index.html',
