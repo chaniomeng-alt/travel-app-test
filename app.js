@@ -1599,6 +1599,17 @@ async function ensureTripDocForStorage(t) {
   let memberUids = Array.isArray(t.memberUids) ? t.memberUids.slice() : [];
   if (!memberUids.includes(ownerUid)) memberUids.unshift(ownerUid);
   if (!memberUids.includes(uid)) memberUids.push(uid);
+  try {
+    const snap = await fbDb.collection('trips').doc(t.id).get();
+    if (snap.exists) {
+      const d = snap.data() || {};
+      if (Array.isArray(d.memberUids)) {
+        for (const m of d.memberUids) {
+          if (m && !memberUids.includes(m)) memberUids.push(m);
+        }
+      }
+    }
+  } catch (e) { console.warn('[cloud] ensure members merge', e); }
   memberUids = [...new Set(memberUids.filter(Boolean))];
   t.cloudOwnerUid = ownerUid;
   t.memberUids = memberUids;
@@ -4134,14 +4145,20 @@ async function pushLocalToCloud(fromMerge, prefetchedCloudMap, forceUpload) {
     for (const t of (APP.trips || [])) {
       if (!t.updatedAt) t.updatedAt = now;
       const ownerUid = t.cloudOwnerUid || uid;
+      const existing = cloudMap.get(t.id);
       let memberUids = Array.isArray(t.memberUids) ? t.memberUids.slice() : [];
       if (!memberUids.includes(ownerUid)) memberUids.unshift(ownerUid);
       if (ownerUid === uid && !memberUids.includes(uid)) memberUids.push(uid);
+      /* Keep companions already on cloud — force push / other device must not wipe memberUids */
+      if (existing && Array.isArray(existing.memberUids)) {
+        for (const m of existing.memberUids) {
+          if (m && !memberUids.includes(m)) memberUids.push(m);
+        }
+      }
       memberUids = [...new Set(memberUids.filter(Boolean))];
       t.cloudOwnerUid = ownerUid;
       t.memberUids = memberUids;
 
-      const existing = cloudMap.get(t.id);
       const cloudAt = cloudDocUpdatedAt(existing);
       let localAt = tripUpdatedAt(t);
       if (forceUpload) {
@@ -4282,6 +4299,25 @@ async function createCompanionAccount() {
       t.updatedAt = now;
       addedTitles.push(t.title || t.id);
     }
+    /* Also add companion onto any owner cloud trips missing from this device */
+    try {
+      const cloudMap = await fetchMyCloudTrips(ownerUid);
+      for (const [id, cdata] of cloudMap) {
+        if (!cdata || cdata.ownerUid !== ownerUid) continue;
+        let members = Array.isArray(cdata.memberUids) ? cdata.memberUids.slice() : [];
+        if (!members.includes(ownerUid)) members.unshift(ownerUid);
+        if (!members.includes(newUid)) members.push(newUid);
+        members = [...new Set(members.filter(Boolean))];
+        const local = trips.find(x => x.id === id);
+        if (local) {
+          local.memberUids = [...new Set((local.memberUids || []).concat(members))];
+          continue;
+        }
+        await fbDb.collection('trips').doc(id).update({ memberUids: members });
+        const title = (cdata.trip && cdata.trip.title) || id;
+        if (!addedTitles.includes(title)) addedTitles.push(title);
+      }
+    } catch (e) { console.warn('[cloud] companion cloud share', e); }
     store.set(APP_KEY, APP);
     await pushLocalToCloud(false, null, true);
 
