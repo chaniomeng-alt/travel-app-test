@@ -20,7 +20,7 @@
 /* SW escape: app.js crash 前都要跑；一次清舊 cache 再註冊，唔再卡死 */
 (function () {
   if (!('serviceWorker' in navigator)) return;
-  var WANT = 'v6-30-api-key-rotate';
+  var WANT = 'v6-31-backup-auth';
   var KEY = 'travel_sw_bust_v';
   function reg() {
     navigator.serviceWorker.register('./sw.js').then(function (reg) {
@@ -400,7 +400,7 @@
         </div>
       </div>
     </div>
-    <div class="card">
+    <div class="card" id="backupRestoreCard" hidden>
       <div class="set-h"><div class="ci">💾</div><div><b>備份同還原</b><small>匯出／匯入旅程資料（JSON）</small></div></div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
         <button type="button" class="btn" id="btnExport">匯出備份</button>

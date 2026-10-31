@@ -3493,6 +3493,7 @@ function dismissBackupBanner() {
 function checkBackupReminder() {
   const b = $('backupBanner');
   if (!b) return;
+  if (!cloudUser) { b.hidden = true; return; }
   let last = 0, dismissedAt = 0;
   try { last = +localStorage.getItem(LAST_EXPORT_KEY) || 0; } catch (e) {}
   try { dismissedAt = +localStorage.getItem(BACKUP_DISMISS_KEY) || 0; } catch (e) {}
@@ -3508,6 +3509,17 @@ function goBackupSettings() {
   }
   const card = $('btnExport');
   if (card) setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80);
+}
+/** 已 Firebase 登入（任何帳，含同伴）。只用於 UI 顯示，唔改 Auth 流程。 */
+function isLoggedIn() {
+  return !!cloudUser;
+}
+/** 備份／還原／示範資料：未登入隱藏；登入後顯示。唔影響登入表單。 */
+function updateBackupRestoreUI() {
+  const loggedIn = isLoggedIn();
+  const card = $('backupRestoreCard');
+  if (card) card.hidden = !loggedIn;
+  checkBackupReminder();
 }
 async function exportBackup() {
   try {
@@ -3595,7 +3607,7 @@ if ($('btnLoadDemo')) $('btnLoadDemo').onclick = () => {
 };
 if ($('backupBannerGo')) $('backupBannerGo').onclick = () => { goBackupSettings(); };
 if ($('backupBannerDismiss')) $('backupBannerDismiss').onclick = () => dismissBackupBanner();
-checkBackupReminder();
+updateBackupRestoreUI();
 
 showDay(0);
 
@@ -3759,6 +3771,7 @@ function renderCloudAccountUI() {
   }
   renderCompanionUI();
   try { updateBookingEditUI(); if (typeof renderBookings === 'function') renderBookings(); } catch (e) {}
+  try { updateBackupRestoreUI(); } catch (e) {}
   cloudSetStatus(cloudLastStatus);
 }
 
