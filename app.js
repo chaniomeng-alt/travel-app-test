@@ -1021,6 +1021,9 @@ const coverCSS = c => !c ? `background:${COVERS[0]}` : c.startsWith('#') ? `back
 function renderHome() {
   const L = document.getElementById('tripList'); L.innerHTML = '';
   const today = isoDate(new Date());
+  const allowManage = typeof canManageTrips === 'function' ? canManageTrips() : false;
+  const addBtn = document.getElementById('addTrip');
+  if (addBtn) addBtn.hidden = !allowManage;
   if (normalizeTripOrder()) {
     try { store.set(APP_KEY, APP); } catch (e) {}
   }
@@ -1041,16 +1044,19 @@ function renderHome() {
       <div class="trip-meta">📍 ${escH(t.destination || '未填目的地')}</div>
       <div class="trip-meta">${t.startDate.replace(/-/g, '/')} – ${t.endDate.replace(/-/g, '/')}・${n} 日</div>
       ${tripPartyLabel(t) ? `<div class="trip-meta trip-party">${escH(tripPartyLabel(t))}</div>` : ''}${extra}</div>
-      <button class="trip-more" aria-label="更多">⋯</button>`;
+      ${allowManage ? '<button class="trip-more" aria-label="更多">⋯</button>' : ''}`;
     c.onclick = e => { if (!e.target.closest('.trip-more,.trip-menu')) enterTrip(t.id); };
-    c.querySelector('.trip-more').onclick = e => {
+    const more = c.querySelector('.trip-more');
+    if (more) more.onclick = e => {
       e.stopPropagation();
+      if (!canManageTrips()) { toast('請先登入先可以管理旅程'); return; }
       const open = c.querySelector('.trip-menu'); document.querySelectorAll('.trip-menu').forEach(m => m.remove());
       if (open) return;
       const m = document.createElement('div'); m.className = 'trip-menu';
       m.innerHTML = '<button data-a="edit">編輯</button><button data-a="dup">複製</button><button data-a="del" class="danger">刪除</button>';
       m.onclick = ev => {
         ev.stopPropagation(); const a = ev.target.dataset.a; m.remove();
+        if (!canManageTrips()) { toast('請先登入先可以管理旅程'); return; }
         if (a === 'edit') openTripModal(t);
         if (a === 'dup') { const cp = JSON.parse(JSON.stringify(t)); cp.id = uid('t'); cp.title = t.title + '（副本）'; APP.trips.splice(APP.trips.indexOf(t) + 1, 0, cp); persist(); renderHome(); }
         if (a === 'del') askDelete(t);
@@ -1065,10 +1071,14 @@ document.addEventListener('click', e => {
   if (!e.target.closest('.item-menu,.item-more,.item-more-wrap')) document.querySelectorAll('.item-menu').forEach(m => m.remove());
 });
 function askDelete(t) {
+  if (!canManageTrips()) { toast('請先登入先可以刪除旅程'); return; }
   const M = document.getElementById('confirmModal');
   document.getElementById('cfMsg').textContent = APP.trips.length <= 1 ? '至少要保留一個旅程，所以唔可以刪除。' : `「${t.title}」同入面所有行程、預算、清單都會刪除，冇得還原。`;
   document.getElementById('cfYes').hidden = APP.trips.length <= 1;
-  document.getElementById('cfYes').onclick = () => { deleteTrip(t.id); M.hidden = true; renderHome(); };
+  document.getElementById('cfYes').onclick = () => {
+    if (!canManageTrips()) { toast('請先登入先可以刪除旅程'); M.hidden = true; return; }
+    deleteTrip(t.id); M.hidden = true; renderHome();
+  };
   document.getElementById('cfNo').onclick = () => { M.hidden = true; };
   M.hidden = false;
 }
@@ -1084,6 +1094,7 @@ function tmRenderCovers() {
   $id('tmCovers').querySelectorAll('[data-c]').forEach(b => b.onclick = () => { tmCover = b.dataset.c; tmRenderCovers(); });
 }
 function openTripModal(t) {
+  if (!canManageTrips()) { toast('請先登入先可以' + (t ? '編輯' : '新增') + '旅程'); return; }
   tmEditing = t || null;
   $id('tmTitle').textContent = t ? '編輯旅程' : '新增旅程';
   const td = isoDate(new Date());
@@ -1113,6 +1124,7 @@ $id('tmImg').onchange = e => {
   img.src = url; e.target.value = '';
 };
 $id('tmSave').onclick = () => {
+  if (!canManageTrips()) { toast('請先登入先可以儲存旅程'); return; }
   const title = $id('tmName').value.trim(), a = $id('tmStart').value, b = $id('tmEnd').value;
   if (!title) return $id('tmErr').textContent = '請輸入旅程名稱';
   if (!a || !b || b < a) return $id('tmErr').textContent = '結束日期唔可以早過開始日期';
@@ -1129,7 +1141,7 @@ $id('tmSave').onclick = () => {
   } else createTrip(o);
   $id('tripModal').hidden = true; renderHome();
 };
-$id('addTrip').onclick = () => openTripModal();
+$id('addTrip').onclick = () => { if (!canManageTrips()) { toast('請先登入先可以新增旅程'); return; } openTripModal(); };
 if (!IN_TRIP) { document.body.classList.add('at-home'); $id('home').hidden = false; renderHome(); }
 
 
@@ -3823,6 +3835,19 @@ function canEditBookings() {
 function canViewBookingFiles() {
   return isLoggedIn();
 }
+/** 首頁新增／編輯／複製／刪除旅程：要登入（主帳或同伴）。未登入只可睇列表同入去睇。 */
+function canManageTrips() {
+  return isLoggedIn();
+}
+function updateHomeTripUI() {
+  const allow = canManageTrips();
+  const add = document.getElementById('addTrip');
+  if (add) add.hidden = !allow;
+  const home = document.getElementById('home');
+  if (home && !home.hidden) {
+    try { renderHome(); } catch (e) {}
+  }
+}
 /** 住宿 meta 顯示：收埋床型描述（大雙人床等），唔改 Auth。 */
 function stayMetaDisplay(s) {
   let txt = String((s && (s.addr || s.meta || s.note)) || '');
@@ -3899,6 +3924,7 @@ function renderCloudAccountUI() {
   }
   renderCompanionUI();
   try { updateBookingEditUI(); if (typeof renderBookings === 'function') renderBookings(); } catch (e) {}
+  try { updateHomeTripUI(); } catch (e) {}
   try { updateBackupRestoreUI(); } catch (e) {}
   cloudSetStatus(cloudLastStatus);
 }
