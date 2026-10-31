@@ -3125,7 +3125,23 @@ const PRESET_TODOS = [
 ];
 let todos = (trip.todos || []).map(o => Object.assign({ g: o.g || 'pre' }, o));
 let todoEdit = null;
+let todoSortables = [];
+function destroyTodoSortables() {
+  todoSortables.forEach(s => { try { s.destroy(); } catch (_) {} });
+  todoSortables = [];
+}
 function saveTodos() { trip.todos = todos; saveTrip(trip); renderTodos(); }
+/** Reorder matching items in `todos` by visual indices; keep non-matching slots. */
+function applyTodoReorder(pred, oldIndex, newIndex) {
+  if (oldIndex === newIndex || oldIndex < 0 || newIndex < 0) return;
+  const items = todos.filter(pred);
+  if (oldIndex >= items.length || newIndex >= items.length) return;
+  const moved = items.splice(oldIndex, 1)[0];
+  items.splice(newIndex, 0, moved);
+  let i = 0;
+  todos = todos.map(o => pred(o) ? items[i++] : o);
+  saveTodos();
+}
 function openTodoEdit(o) {
   document.querySelectorAll('.item-menu').forEach(m => m.remove());
   todoEdit = o;
@@ -3140,7 +3156,8 @@ function todoRow(o, checked) {
   const i = todos.indexOf(o);
   const r = document.createElement('div');
   r.className = 'todo' + (checked ? ' done' : '');
-  r.innerHTML = `<input type="checkbox" id="td${i}" ${checked ? 'checked' : ''}><label for="td${i}"></label><div class="item-more-wrap"><button type="button" class="item-more" aria-label="更多">⋮</button></div>`;
+  r.dataset.todoIdx = String(i);
+  r.innerHTML = `<span class="handle" title="長按拖動排序" aria-label="拖動排序">⠿</span><input type="checkbox" id="td${i}" ${checked ? 'checked' : ''}><label for="td${i}"></label><div class="item-more-wrap"><button type="button" class="item-more" aria-label="更多">⋮</button></div>`;
   r.querySelector('label').textContent = o.t;
   r.querySelector('input').onchange = e => { o.d = e.target.checked ? 1 : 0; saveTodos(); };
   r.querySelector('.item-more').onclick = e => {
@@ -3165,19 +3182,47 @@ function todoRow(o, checked) {
   };
   return r;
 }
+function bindTodoSortable(listEl, pred) {
+  if (!window.Sortable || !listEl) return;
+  const inst = Sortable.create(listEl, {
+    handle: '.handle',
+    animation: 150,
+    delay: 180,
+    delayOnTouchOnly: true,
+    ghostClass: 'sortable-ghost',
+    chosenClass: 'sortable-chosen',
+    onEnd: evt => {
+      if (evt.oldIndex == null || evt.newIndex == null || evt.oldIndex === evt.newIndex) return;
+      applyTodoReorder(pred, evt.oldIndex, evt.newIndex);
+    }
+  });
+  todoSortables.push(inst);
+}
 function renderTodos() {
+  destroyTodoSortables();
   const box = $('todoList'); box.innerHTML = '';
   const groups = ['pre','visa','insurance'];
   groups.forEach(g => {
     const items = todos.filter(o => !o.d && (o.g || 'pre') === g);
     if (!items.length && g !== 'pre') return;
     const h = document.createElement('div'); h.className = 'todo-group'; h.textContent = TODO_GROUPS[g]; box.appendChild(h);
-    items.forEach(o => box.appendChild(todoRow(o, false)));
+    const list = document.createElement('div');
+    list.className = 'todo-group-list';
+    list.dataset.g = g;
+    items.forEach(o => list.appendChild(todoRow(o, false)));
+    box.appendChild(list);
+    const pred = o => !o.d && (o.g || 'pre') === g;
+    bindTodoSortable(list, pred);
   });
   const doneItems = todos.filter(o => o.d);
   if (doneItems.length) {
     const h = document.createElement('div'); h.className = 'todo-group'; h.textContent = '已完成'; box.appendChild(h);
-    doneItems.forEach(o => box.appendChild(todoRow(o, true)));
+    const list = document.createElement('div');
+    list.className = 'todo-group-list';
+    list.dataset.g = 'done';
+    doneItems.forEach(o => list.appendChild(todoRow(o, true)));
+    box.appendChild(list);
+    bindTodoSortable(list, o => !!o.d);
   }
   const done = todos.filter(o => o.d).length, pct = todos.length ? Math.round(done / todos.length * 100) : 0;
   $('todoPct').textContent = `${done}/${todos.length} · ${pct}%`;

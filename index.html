@@ -20,7 +20,7 @@
 /* SW escape: app.js crash 前都要跑；一次清舊 cache 再註冊，唔再卡死 */
 (function () {
   if (!('serviceWorker' in navigator)) return;
-  var WANT = 'v6-35-fbauth-guard';
+  var WANT = 'v6-36-prep-drag';
   var KEY = 'travel_sw_bust_v';
   function reg() {
     navigator.serviceWorker.register('./sw.js').then(function (reg) {
@@ -302,7 +302,7 @@
   <section class="view" id="v-todo">
     <div class="page-head">
       <h1 class="page">出發前準備</h1>
-      <div class="page-sub">一項一項打剔</div>
+      <div class="page-sub">一項一項打剔 · 可拖動排序</div>
       <div class="sticker bob" style="width:96px;height:96px;top:-8px;" id="stk-todo"></div>
     </div>
     <div class="card">
